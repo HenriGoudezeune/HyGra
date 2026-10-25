@@ -19,6 +19,7 @@ p.add_argument("--batch", type=int, default=32)
 p.add_argument("--lr", type=float, default=5e-4)
 p.add_argument("--vq-weight", type=float, default=1.0)
 p.add_argument("--eval-every", type=int, default=250)
+p.add_argument("--resume", action="store_true", help="continue from --out if it exists")
 args = p.parse_args()
 
 dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -29,6 +30,16 @@ print(f"device={dev}  params={sum(p.numel() for p in model.parameters()) / 1e6:.
 data = TokenData(args.data)
 opt = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=0.01)
 amp = dict(device_type="cuda", dtype=torch.bfloat16, enabled=dev == "cuda")
+
+start = 0
+if args.resume and os.path.exists(args.out):
+    ck = torch.load(args.out, map_location=dev)
+    cfg = VQConfig(**ck["cfg"])
+    model.load_state_dict(ck["model"])
+    if "opt" in ck:
+        opt.load_state_dict(ck["opt"])
+    start = ck.get("step", 0)
+    print(f"resumed from {args.out} at step {start}")
 
 
 def lr_at(step, warmup=200):
@@ -41,13 +52,13 @@ def lr_at(step, warmup=200):
 @torch.no_grad()
 def evaluate(n=10):
     model.eval()
-    accs, usage = [], torch.zeros(cfg.codebook_size, device=dev)
+    accs, usage = [], torch.zeros(cfg.codebook_sizes[-1], device=dev)
     for _ in range(n):
         x = data.batch("val", args.batch, cfg.context_length, dev)
         with torch.autocast(**amp):
             _, _, acc, idxs = model(x)
         accs.append(acc.item())
-        usage += torch.bincount(idxs[-1].flatten(), minlength=cfg.codebook_size)
+        usage += torch.bincount(idxs[-1].flatten(), minlength=usage.numel())
     model.train()
     prob = usage / usage.sum()
     ppl = torch.exp(-(prob[prob > 0] * prob[prob > 0].log()).sum()).item()
@@ -56,7 +67,7 @@ def evaluate(n=10):
 
 os.makedirs(os.path.dirname(args.out), exist_ok=True)
 t0 = time.time()
-for step in range(args.steps):
+for step in range(start, args.steps):
     for g in opt.param_groups:
         g["lr"] = lr_at(step)
     x = data.batch("train", args.batch, cfg.context_length, dev)
@@ -74,5 +85,6 @@ for step in range(args.steps):
     if (step + 1) % args.eval_every == 0 or step + 1 == args.steps:
         vacc, ppl = evaluate()
         print(f"  [val] token reconstruction acc {vacc:.3f}  finest-level code perplexity {ppl:.0f}", flush=True)
-        torch.save({"cfg": asdict(cfg), "model": model.state_dict()}, args.out)
+        torch.save({"cfg": asdict(cfg), "model": model.state_dict(), "opt": opt.state_dict(),
+                    "step": step + 1}, args.out)
 print(f"saved {args.out}")

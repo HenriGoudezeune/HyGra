@@ -21,6 +21,7 @@ p.add_argument("--lr", type=float, default=4e-4)
 p.add_argument("--pad-prob", type=float, default=0.3,
                help="chance to left-pad the prefix, so short prompts work at inference")
 p.add_argument("--eval-every", type=int, default=500)
+p.add_argument("--resume", action="store_true", help="continue from --out if it exists")
 args = p.parse_args()
 
 dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -40,6 +41,15 @@ L = vcfg.context_length
 N = gcfg.prefix_chunks
 opt = torch.optim.AdamW(gen.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=0.05)
 amp = dict(device_type="cuda", dtype=torch.bfloat16, enabled=dev == "cuda")
+
+start = 0
+if args.resume and os.path.exists(args.out):
+    gk = torch.load(args.out, map_location=dev)
+    gen.load_state_dict(gk["model"])
+    if "opt" in gk:
+        opt.load_state_dict(gk["opt"])
+    start = gk.get("step", 0)
+    print(f"resumed from {args.out} at step {start}")
 
 
 def lr_at(step, warmup=300):
@@ -79,7 +89,7 @@ def evaluate(n=10):
 
 os.makedirs(os.path.dirname(args.out), exist_ok=True)
 t0 = time.time()
-for step in range(args.steps):
+for step in range(start, args.steps):
     for g in opt.param_groups:
         g["lr"] = lr_at(step)
     pz, idxs, cums = get_batch("train")
@@ -96,5 +106,6 @@ for step in range(args.steps):
     if (step + 1) % args.eval_every == 0 or step + 1 == args.steps:
         vl, va = evaluate()
         print(f"  [val] loss {vl:.3f}  code acc {va:.3f}", flush=True)
-        torch.save({"cfg": asdict(gcfg), "model": gen.state_dict()}, args.out)
+        torch.save({"cfg": asdict(gcfg), "model": gen.state_dict(), "opt": opt.state_dict(),
+                    "step": step + 1}, args.out)
 print(f"saved {args.out}")

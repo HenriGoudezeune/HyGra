@@ -29,7 +29,9 @@ class VQConfig:
     # finest level = latent length (2 tokens per latent); the repeated 64 is a second
     # full-resolution residual pass, which buys the capacity exact code reconstruction needs
     levels: list = field(default_factory=lambda: [1, 2, 4, 8, 16, 32, 48, 64, 64])
-    codebook_size: int = 4096
+    # small codebooks at coarse levels: with 4096 codes everywhere the coarse codes spread out
+    # almost uniformly (pure noise to the generator); VAR-style coarse = few, predictable concepts
+    codebook_sizes: list = field(default_factory=lambda: [256, 256, 512, 512, 1024, 2048, 4096, 4096, 4096])
     beta: float = 0.25                 # commitment cost
     ema_decay: float = 0.99
 
@@ -67,14 +69,15 @@ class Block(nn.Module):
 class MultiScaleRVQ(nn.Module):
     """Residual VQ over scales: each level quantizes the area-downsampled residual."""
 
-    def __init__(self, levels, codebook_size, dim, beta=0.25, decay=0.99):
+    def __init__(self, levels, codebook_sizes, dim, beta=0.25, decay=0.99):
         super().__init__()
-        self.levels, self.K, self.dim = list(levels), codebook_size, dim
+        self.levels, self.sizes, self.dim = list(levels), list(codebook_sizes), dim
+        self.K = max(self.sizes)           # buffers hold K rows; level k only uses the first sizes[k]
         self.T = self.levels[-1]
         self.beta, self.decay = beta, decay
         n = len(self.levels)
-        self.register_buffer("codebooks", torch.randn(n, codebook_size, dim) * 0.02)
-        self.register_buffer("ema_count", torch.ones(n, codebook_size))
+        self.register_buffer("codebooks", torch.randn(n, self.K, dim) * 0.02)
+        self.register_buffer("ema_count", torch.ones(n, self.K))
         self.register_buffer("ema_sum", self.codebooks.clone())
         self.register_buffer("initialized", torch.tensor(False))
         self.phi = nn.ModuleList(nn.Conv1d(dim, dim, 3, padding=1) for _ in self.levels)
@@ -96,33 +99,36 @@ class MultiScaleRVQ(nn.Module):
         return 0.5 * h + 0.5 * self.phi[k](h.transpose(1, 2)).transpose(1, 2)
 
     def nearest(self, k, r):
-        cb = self.codebooks[k]
+        cb = self.codebooks[k, :self.sizes[k]]
         d = r.pow(2).sum(-1, keepdim=True) - 2 * r @ cb.t() + cb.pow(2).sum(-1)
         return d.argmin(-1)
 
     @torch.no_grad()
     def _ema_update(self, k, r, idx):
+        K = self.sizes[k]
+        count, total, cb = self.ema_count[k, :K], self.ema_sum[k, :K], self.codebooks[k, :K]
         flat, idx = r.reshape(-1, self.dim), idx.reshape(-1)
-        onehot = F.one_hot(idx, self.K).type_as(flat)
-        self.ema_count[k].mul_(self.decay).add_(onehot.sum(0), alpha=1 - self.decay)
-        self.ema_sum[k].mul_(self.decay).add_(onehot.t() @ flat, alpha=1 - self.decay)
+        onehot = F.one_hot(idx, K).type_as(flat)
+        count.mul_(self.decay).add_(onehot.sum(0), alpha=1 - self.decay)
+        total.mul_(self.decay).add_(onehot.t() @ flat, alpha=1 - self.decay)
         # restart dead codes with random residual vectors from this batch
-        dead = self.ema_count[k] < 1e-2
+        dead = count < 1e-2
         if dead.any():
             pick = flat[torch.randint(0, flat.size(0), (int(dead.sum()),), device=flat.device)]
-            self.ema_sum[k][dead] = pick
-            self.ema_count[k][dead] = 1.0
-        n = self.ema_count[k].sum()
-        count = (self.ema_count[k] + 1e-5) / (n + self.K * 1e-5) * n
-        self.codebooks[k].copy_(self.ema_sum[k] / count[:, None])
+            total[dead] = pick
+            count[dead] = 1.0
+        n = count.sum()
+        smoothed = (count + 1e-5) / (n + K * 1e-5) * n
+        cb.copy_(total / smoothed[:, None])
 
     @torch.no_grad()
     def _init_from(self, z):
         for k, l in enumerate(self.levels):
+            K = self.sizes[k]
             flat = self.down(z, l).reshape(-1, self.dim)
-            pick = flat[torch.randint(0, flat.size(0), (self.K,), device=z.device)]
-            self.codebooks[k].copy_(pick + 0.01 * torch.randn_like(pick))
-            self.ema_sum[k].copy_(self.codebooks[k])
+            pick = flat[torch.randint(0, flat.size(0), (K,), device=z.device)]
+            self.codebooks[k, :K].copy_(pick + 0.01 * torch.randn_like(pick))
+            self.ema_sum[k, :K].copy_(self.codebooks[k, :K])
         self.initialized.fill_(True)
 
     def forward(self, z):
@@ -163,7 +169,7 @@ class VQVAE(nn.Module):
         self.enc_ln = nn.LayerNorm(d)
         self.to_latent = nn.Conv1d(d, cfg.latent_dim, kernel_size=r, stride=r)
         self.latent_norm = nn.LayerNorm(cfg.latent_dim, elementwise_affine=False)
-        self.quant = MultiScaleRVQ(cfg.levels, cfg.codebook_size, cfg.latent_dim, cfg.beta, cfg.ema_decay)
+        self.quant = MultiScaleRVQ(cfg.levels, cfg.codebook_sizes, cfg.latent_dim, cfg.beta, cfg.ema_decay)
         self.from_latent = nn.ConvTranspose1d(cfg.latent_dim, d, kernel_size=r, stride=r)
         self.dec_pos = nn.Parameter(torch.randn(1, L, d) * 0.02)
         self.dec = nn.ModuleList(Block(d, cfg.n_head) for _ in range(cfg.dec_layers))
@@ -214,7 +220,7 @@ class NCMGenerator(nn.Module):
         self.lvl_emb = nn.Embedding(len(self.levels) + 1, d)
         self.blocks = nn.ModuleList(Block(d, cfg.n_head, cfg.dropout) for _ in range(cfg.n_layers))
         self.ln = nn.LayerNorm(d)
-        self.heads = nn.ModuleList(nn.Linear(d, vq.codebook_size) for _ in self.levels)
+        self.heads = nn.ModuleList(nn.Linear(d, K) for K in vq.codebook_sizes)
 
     def forward(self, prefix_z, level_inputs):
         """prefix_z: (B, P, dim) encoding of the previous prefix_chunks chunks.
@@ -246,8 +252,8 @@ class NCMGenerator(nn.Module):
         # coarse levels hold few positions but decide what the chunk is about: give every level
         # equal weight in half of the loss instead of letting the 64-code levels dominate
         loss = 0.5 * per_level.mean() + 0.5 * token_mean
-        lg, tgt = torch.cat(logits, dim=1), torch.cat(idxs, dim=1)
-        acc = (lg.argmax(-1) == tgt).float().mean()
+        hits = sum((lg.argmax(-1) == t).float().sum() for lg, t in zip(logits, idxs))
+        acc = hits / sizes.sum() / prefix_z.size(0)
         return loss, acc
 
     @torch.no_grad()
