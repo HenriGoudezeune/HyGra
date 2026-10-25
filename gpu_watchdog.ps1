@@ -15,7 +15,10 @@ while ($true) {
             $line += " STOPPED-TRAINING"
             $hot = 0
         }
-        Add-Content -Path $log -Value $line -Encoding ascii
+        for ($i = 0; $i -lt 5; $i++) {
+            try { Add-Content -Path $log -Value $line -Encoding ascii -ErrorAction Stop; break }
+            catch { Start-Sleep -Milliseconds 200 }
+        }
     }
     Start-Sleep -Seconds 30
 }

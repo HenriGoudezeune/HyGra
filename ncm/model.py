@@ -239,9 +239,14 @@ class NCMGenerator(nn.Module):
     def loss(self, prefix_z, quant: MultiScaleRVQ, idxs, cums):
         level_inputs = [quant.down(cums[k - 1], self.levels[k]) for k in range(1, len(self.levels))]
         logits = self.forward(prefix_z, level_inputs)
-        lg = torch.cat(logits, dim=1).float()
-        tgt = torch.cat(idxs, dim=1)
-        loss = F.cross_entropy(lg.reshape(-1, lg.size(-1)), tgt.reshape(-1))
+        per_level = torch.stack([F.cross_entropy(lg.float().reshape(-1, lg.size(-1)), t.reshape(-1))
+                                 for lg, t in zip(logits, idxs)])
+        sizes = torch.tensor(self.levels, device=per_level.device, dtype=per_level.dtype)
+        token_mean = (per_level * sizes).sum() / sizes.sum()
+        # coarse levels hold few positions but decide what the chunk is about: give every level
+        # equal weight in half of the loss instead of letting the 64-code levels dominate
+        loss = 0.5 * per_level.mean() + 0.5 * token_mean
+        lg, tgt = torch.cat(logits, dim=1), torch.cat(idxs, dim=1)
         acc = (lg.argmax(-1) == tgt).float().mean()
         return loss, acc
 
