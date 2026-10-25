@@ -9,13 +9,14 @@ import torch
 
 from ncm.data import TokenData, get_encoder
 from ncm.model import GenConfig, NCMGenerator, VQConfig, VQVAE
+from ncm.thermal import cool_down
 
 p = argparse.ArgumentParser()
 p.add_argument("--data", default="data")
 p.add_argument("--tokenizer", default="ckpt/tokenizer.pt")
 p.add_argument("--out", default="ckpt/generator.pt")
-p.add_argument("--steps", type=int, default=10000)
-p.add_argument("--batch", type=int, default=64)
+p.add_argument("--steps", type=int, default=40000)
+p.add_argument("--batch", type=int, default=32)
 p.add_argument("--lr", type=float, default=4e-4)
 p.add_argument("--pad-prob", type=float, default=0.3,
                help="chance to left-pad the prefix, so short prompts work at inference")
@@ -34,8 +35,9 @@ gcfg = GenConfig()
 gen = NCMGenerator(gcfg, vcfg).to(dev)
 print(f"device={dev}  generator params={sum(p.numel() for p in gen.parameters()) / 1e6:.1f}M")
 data = TokenData(args.data)
-eot = get_encoder().eot_token
+eot = get_encoder(args.data).eot_token
 L = vcfg.context_length
+N = gcfg.prefix_chunks
 opt = torch.optim.AdamW(gen.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=0.05)
 amp = dict(device_type="cuda", dtype=torch.bfloat16, enabled=dev == "cuda")
 
@@ -48,15 +50,15 @@ def lr_at(step, warmup=300):
 
 
 def get_batch(split):
-    x = data.batch(split, args.batch, 2 * L, dev)
-    prefix, target = x[:, :L].clone(), x[:, L:]
+    x = data.batch(split, args.batch, (N + 1) * L, dev)
+    prefix, target = x[:, :N * L].clone(), x[:, N * L:]
     if split == "train" and args.pad_prob > 0:
         pad = torch.rand(args.batch, device=dev) < args.pad_prob
-        cut = torch.randint(0, L, (args.batch,), device=dev)
-        cols = torch.arange(L, device=dev)[None, :]
+        cut = torch.randint(0, N * L, (args.batch,), device=dev)
+        cols = torch.arange(N * L, device=dev)[None, :]
         prefix[pad[:, None] & (cols < cut[:, None])] = eot
     with torch.no_grad(), torch.autocast(**amp):
-        prefix_z = vq.encode(prefix).float()
+        prefix_z = vq.encode_chunks(prefix).float()
         _, idxs, _, cums = vq.quant(vq.encode(target))
     return prefix_z, idxs, cums
 
@@ -88,6 +90,7 @@ for step in range(args.steps):
     torch.nn.utils.clip_grad_norm_(gen.parameters(), 1.0)
     opt.step()
     if step % 50 == 0:
+        cool_down()
         print(f"step {step:5d}  loss {loss.item():.3f}  code acc {acc.item():.3f}  "
               f"{time.time() - t0:.0f}s", flush=True)
     if (step + 1) % args.eval_every == 0 or step + 1 == args.steps:

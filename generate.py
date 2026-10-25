@@ -16,6 +16,7 @@ p.add_argument("--top-k", type=int, default=50)
 p.add_argument("--show-levels", action="store_true", help="print the text decoded at every scale")
 p.add_argument("--tokenizer", default="ckpt/tokenizer.pt")
 p.add_argument("--generator", default="ckpt/generator.pt")
+p.add_argument("--data", default="data", help="directory holding bpe.json")
 p.add_argument("--seed", type=int)
 args = p.parse_args()
 
@@ -30,8 +31,9 @@ gk = torch.load(args.generator, map_location=dev)
 gen = NCMGenerator(GenConfig(**gk["cfg"]), vcfg).to(dev).eval()
 gen.load_state_dict(gk["model"])
 
-enc = get_encoder()
+enc = get_encoder(args.data)
 L, eot = vcfg.context_length, enc.eot_token
+W = gen.cfg.prefix_chunks * L
 prompt = open(args.prompt_file, encoding="utf-8").read() if args.prompt_file else args.prompt
 context = enc.encode_ordinary(prompt)
 out = []
@@ -39,13 +41,13 @@ out = []
 t0 = time.time()
 with torch.no_grad():
     for c in range(args.chunks):
-        window = (context + out)[-L:]
-        window = [eot] * (L - len(window)) + window
-        prefix_z = vq.encode(torch.tensor([window], device=dev))
+        window = (context + out)[-W:]
+        window = [eot] * (W - len(window)) + window
+        prefix_z = vq.encode_chunks(torch.tensor([window], device=dev))
         f_hat, cums = gen.generate(prefix_z, vq.quant, args.temperature, args.top_k)
         if args.show_levels:
             for k, cum in enumerate(cums):
-                text = enc.decode(vq.decode(cum).argmax(-1)[0].tolist()).replace(enc.decode([eot]), "")
+                text = enc.decode(vq.decode(cum).argmax(-1)[0].tolist())
                 print(f"--- chunk {c} level {k} ({vcfg.levels[k]} codes) ---\n{text}\n")
         new = vq.decode(f_hat).argmax(-1)[0].tolist()
         if eot in new:

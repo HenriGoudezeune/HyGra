@@ -7,13 +7,14 @@ from dataclasses import asdict
 
 import torch
 
-from ncm.data import TokenData
+from ncm.data import TokenData, get_encoder
 from ncm.model import VQConfig, VQVAE
+from ncm.thermal import cool_down
 
 p = argparse.ArgumentParser()
 p.add_argument("--data", default="data")
 p.add_argument("--out", default="ckpt/tokenizer.pt")
-p.add_argument("--steps", type=int, default=6000)
+p.add_argument("--steps", type=int, default=20000)
 p.add_argument("--batch", type=int, default=32)
 p.add_argument("--lr", type=float, default=5e-4)
 p.add_argument("--vq-weight", type=float, default=1.0)
@@ -22,7 +23,7 @@ args = p.parse_args()
 
 dev = "cuda" if torch.cuda.is_available() else "cpu"
 torch.backends.cuda.matmul.allow_tf32 = True
-cfg = VQConfig()
+cfg = VQConfig(vocab_size=get_encoder(args.data).vocab_size)
 model = VQVAE(cfg).to(dev)
 print(f"device={dev}  params={sum(p.numel() for p in model.parameters()) / 1e6:.1f}M")
 data = TokenData(args.data)
@@ -67,6 +68,7 @@ for step in range(args.steps):
     torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
     opt.step()
     if step % 50 == 0:
+        cool_down()
         print(f"step {step:5d}  ce {ce.item():.3f}  vq {vq.item():.4f}  acc {acc.item():.3f}  "
               f"{time.time() - t0:.0f}s", flush=True)
     if (step + 1) % args.eval_every == 0 or step + 1 == args.steps:

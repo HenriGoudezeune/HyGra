@@ -19,25 +19,28 @@ import torch.nn.functional as F
 
 @dataclass
 class VQConfig:
-    vocab_size: int = 50257
+    vocab_size: int = 16384
     context_length: int = 128          # BPE tokens per chunk
-    d_model: int = 256
-    n_head: int = 4
-    enc_layers: int = 3
-    dec_layers: int = 3
+    d_model: int = 384
+    n_head: int = 6
+    enc_layers: int = 4
+    dec_layers: int = 4
     latent_dim: int = 64
-    levels: list = field(default_factory=lambda: [1, 2, 4, 8, 16, 32])
-    codebook_size: int = 1024
+    # finest level = latent length (2 tokens per latent); the repeated 64 is a second
+    # full-resolution residual pass, which buys the capacity exact code reconstruction needs
+    levels: list = field(default_factory=lambda: [1, 2, 4, 8, 16, 32, 48, 64, 64])
+    codebook_size: int = 4096
     beta: float = 0.25                 # commitment cost
     ema_decay: float = 0.99
 
 
 @dataclass
 class GenConfig:
-    d_model: int = 384
-    n_head: int = 6
-    n_layers: int = 6
+    d_model: int = 512
+    n_head: int = 8
+    n_layers: int = 8
     dropout: float = 0.0
+    prefix_chunks: int = 4             # previous chunks visible as context
 
 
 class Block(nn.Module):
@@ -159,6 +162,7 @@ class VQVAE(nn.Module):
         self.enc = nn.ModuleList(Block(d, cfg.n_head) for _ in range(cfg.enc_layers))
         self.enc_ln = nn.LayerNorm(d)
         self.to_latent = nn.Conv1d(d, cfg.latent_dim, kernel_size=r, stride=r)
+        self.latent_norm = nn.LayerNorm(cfg.latent_dim, elementwise_affine=False)
         self.quant = MultiScaleRVQ(cfg.levels, cfg.codebook_size, cfg.latent_dim, cfg.beta, cfg.ema_decay)
         self.from_latent = nn.ConvTranspose1d(cfg.latent_dim, d, kernel_size=r, stride=r)
         self.dec_pos = nn.Parameter(torch.randn(1, L, d) * 0.02)
@@ -169,7 +173,13 @@ class VQVAE(nn.Module):
         x = self.wte(ids) + self.enc_pos
         for b in self.enc:
             x = b(x)
-        return self.to_latent(self.enc_ln(x).transpose(1, 2)).transpose(1, 2)
+        return self.latent_norm(self.to_latent(self.enc_ln(x).transpose(1, 2)).transpose(1, 2))
+
+    def encode_chunks(self, ids):
+        """ids: (B, n*L) -> (B, n*T, dim), each chunk of L tokens encoded independently."""
+        B, L = ids.size(0), self.cfg.context_length
+        z = self.encode(ids.reshape(-1, L))
+        return z.reshape(B, -1, z.size(-1))
 
     def decode(self, f_hat):
         x = self.from_latent(f_hat.transpose(1, 2).to(self.dec_pos.dtype)).transpose(1, 2) + self.dec_pos
@@ -191,7 +201,7 @@ class NCMGenerator(nn.Module):
     def __init__(self, cfg: GenConfig, vq: VQConfig):
         super().__init__()
         self.cfg, self.levels = cfg, list(vq.levels)
-        P, d = vq.levels[-1], cfg.d_model
+        P, d = cfg.prefix_chunks * vq.levels[-1], cfg.d_model
         self.prefix_len = P
         self.inp = nn.Linear(vq.latent_dim, d)
         self.sos = nn.Parameter(torch.randn(1, self.levels[0], d) * 0.02)
@@ -207,7 +217,7 @@ class NCMGenerator(nn.Module):
         self.heads = nn.ModuleList(nn.Linear(d, vq.codebook_size) for _ in self.levels)
 
     def forward(self, prefix_z, level_inputs):
-        """prefix_z: (B, P, dim) encoding of the previous chunk.
+        """prefix_z: (B, P, dim) encoding of the previous prefix_chunks chunks.
         level_inputs: inputs for levels 1..n (each (B, l_k, dim)) = downsampled cumulative f_hat.
         Returns logits for levels 0..len(level_inputs)."""
         B = prefix_z.size(0)
