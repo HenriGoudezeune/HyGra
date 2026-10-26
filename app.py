@@ -124,17 +124,27 @@ class Api:
             return {"error": str(e)}
 
 
-def set_icon():
+def set_icon(window):
     """Gives the window (and so the taskbar button) the HyGra icon instead of Python's."""
     user32 = ctypes.windll.user32
     user32.LoadImageW.restype = ctypes.c_void_p
     user32.SendMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_void_p, ctypes.c_void_p]
-    hwnd = user32.FindWindowW(None, "HyGra")
+    hwnd = window.native.Handle.ToInt64()   # our own form; another window may also be titled "HyGra"
     ico = os.path.join(ROOT, "web", "icon.ico")
     for which, size in ((1, 256), (0, 32)):   # ICON_BIG for the taskbar / Alt+Tab, ICON_SMALL for the title bar
         h = user32.LoadImageW(None, ico, 1, size, size, 0x10)   # IMAGE_ICON, LR_LOADFROMFILE
         if hwnd and h:
             user32.SendMessageW(hwnd, 0x80, which, h)   # WM_SETICON
+    if hwnd:   # the taskbar takes its button icon from these window properties, not from WM_SETICON
+        from win32com.propsys import propsys, pscon
+        store = propsys.SHGetPropertyStoreForWindow(hwnd, propsys.IID_IPropertyStore)
+        for key, value in ((pscon.PKEY_AppUserModel_ID, "hydrargyrum.hygra"),
+                           (pscon.PKEY_AppUserModel_RelaunchIconResource, ico + ",0"),
+                           (pscon.PKEY_AppUserModel_RelaunchDisplayNameResource, "HyGra"),
+                           (pscon.PKEY_AppUserModel_RelaunchCommand,
+                            f'"{os.path.join(ROOT, ".venv", "Scripts", "pythonw.exe")}" "{os.path.join(ROOT, "app.py")}"')):
+            store.SetValue(key, propsys.PROPVARIANTType(value))
+        store.Commit()
 
 
 if __name__ == "__main__":
@@ -144,5 +154,5 @@ if __name__ == "__main__":
     api._window = webview.create_window("HyGra", os.path.join(ROOT, "web", "index.html"), js_api=api,
                                        width=1280, height=860, min_size=(420, 600), background_color="#3B461C")
     if sys.platform == "win32":
-        api._window.events.shown += set_icon
+        api._window.events.shown += lambda: set_icon(api._window)
     webview.start()
