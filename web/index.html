@@ -171,8 +171,37 @@ nav .del.arm svg { display: none; }
 .ubar .track i { display: block; height: 100%; width: 0; background: var(--c, var(--mint)); transition: width .4s; }
 .ubar small, .usage .at { font-size: 12px; color: var(--text-mute); letter-spacing: .5px; }
 /* funky mode: randen wisselen van kleur en Claude surft over het scherm zolang er iets bezig is */
-@property --orange { syntax: '<color>'; inherits: true; initial-value: #FF7A1A; }
-:root { transition: --orange 1.2s ease; }
+@property --f1 { syntax: '<color>'; inherits: true; initial-value: #FF7A1A; }
+@property --f2 { syntax: '<color>'; inherits: true; initial-value: #FF7A1A; }
+@property --f3 { syntax: '<color>'; inherits: true; initial-value: #FF7A1A; }
+@property --f4 { syntax: '<color>'; inherits: true; initial-value: #FF7A1A; }
+@property --f5 { syntax: '<color>'; inherits: true; initial-value: #FF7A1A; }
+@keyframes f1 { 0% { --f1: #FF5FA2; } 10.5% { --f1: #FF5FA2; } 14% { --f1: #7FE0C8; } 25.2% { --f1: #7FE0C8; } 29% { --f1: #F2C14E; } 39.5% { --f1: #F2C14E; } 43% { --f1: #9B7BFF; } 53.5% { --f1: #9B7BFF; } 57% { --f1: #4FD1FF; } 67.5% { --f1: #4FD1FF; } 71% { --f1: #FF7A1A; } 82.2% { --f1: #FF7A1A; } 100% { --f1: #B6F23C; } }
+@keyframes f2 { 0% { --f2: #9B7BFF; } 10.5% { --f2: #9B7BFF; } 14% { --f2: #B6F23C; } 25.2% { --f2: #B6F23C; } 29% { --f2: #FF5FA2; } 39.5% { --f2: #FF5FA2; } 43% { --f2: #4FD1FF; } 53.5% { --f2: #4FD1FF; } 57% { --f2: #F2C14E; } 67.5% { --f2: #F2C14E; } 71% { --f2: #7FE0C8; } 82.2% { --f2: #7FE0C8; } 100% { --f2: #FF7A1A; } }
+@keyframes f3 { 0% { --f3: #4FD1FF; } 10.5% { --f3: #4FD1FF; } 14% { --f3: #F2C14E; } 25.2% { --f3: #F2C14E; } 29% { --f3: #FF7A1A; } 39.5% { --f3: #FF7A1A; } 43% { --f3: #FF5FA2; } 53.5% { --f3: #FF5FA2; } 57% { --f3: #B6F23C; } 67.5% { --f3: #B6F23C; } 71% { --f3: #9B7BFF; } 82.2% { --f3: #9B7BFF; } 100% { --f3: #7FE0C8; } }
+@keyframes f4 { 0% { --f4: #B6F23C; } 10.5% { --f4: #B6F23C; } 14% { --f4: #FF5FA2; } 25.2% { --f4: #FF5FA2; } 29% { --f4: #9B7BFF; } 39.5% { --f4: #9B7BFF; } 43% { --f4: #FF7A1A; } 53.5% { --f4: #FF7A1A; } 57% { --f4: #7FE0C8; } 67.5% { --f4: #7FE0C8; } 71% { --f4: #4FD1FF; } 82.2% { --f4: #4FD1FF; } 100% { --f4: #F2C14E; } }
+@keyframes f5 { 0% { --f5: #F2C14E; } 10.5% { --f5: #F2C14E; } 14% { --f5: #4FD1FF; } 25.2% { --f5: #4FD1FF; } 29% { --f5: #7FE0C8; } 39.5% { --f5: #7FE0C8; } 43% { --f5: #B6F23C; } 53.5% { --f5: #B6F23C; } 57% { --f5: #FF7A1A; } 67.5% { --f5: #FF7A1A; } 71% { --f5: #FF5FA2; } 82.2% { --f5: #FF5FA2; } 100% { --f5: #9B7BFF; } }
+body.funky { animation: f1 2.3s linear infinite, f2 3.1s linear infinite, f3 3.7s linear infinite, f4 4.3s linear infinite, f5 5.3s linear infinite; }
+body.funky .app { border-color: var(--f1); }
+body.funky aside { border-right-color: var(--f2); }
+body.funky header { border-bottom-color: var(--f3); }
+body.funky form { border-top-color: var(--f4); }
+body.funky .settings { border-top-color: var(--f5); }
+body.funky aside .cut-sm { background: var(--f3) !important; }
+body.funky .new { background: var(--f4); }
+body.funky .brand b i { color: var(--f2); }
+body.funky select { border-color: var(--f1); }
+body.funky .field { background: var(--f5); }
+body.funky .send { background: var(--f2); }
+body.funky .bubble-me { background: var(--f3); }
+body.funky .bubble-bot { background: var(--f4); }
+body.funky .bubble-bot.claude { background: var(--f1); }
+body.funky .busy, body.funky .busy .blink { background: var(--f5); }
+body.funky .status.busy-pill { background: var(--f4); }
+body.funky nav button.on { border-left-color: var(--f5); }
+body.funky .empty b { color: var(--f3); }
+body.funky .ubar .track i { background: var(--f2); }
+body.funky ::-webkit-scrollbar-thumb { background: var(--f1); }
 .surfer { position: fixed; left: 0; bottom: 120px; z-index: 50; pointer-events: none; display: none;
   animation: surf-x 7s linear infinite; }
 .surfer > div { animation: surf-y 1.75s ease-in-out infinite alternate; }
@@ -582,19 +611,11 @@ function syncLoadCard() {
   else if (!j.node.isConnected) { $("log").append(j.node); scrollDown(); }
 }
 
-// funky mode: zolang er iets bezig is, schuift de randkleur om de paar seconden door
-const FUNKY = ["#FF5FA2", "#7FE0C8", "#F2C14E", "#9B7BFF", "#4FD1FF", "#FF7A1A"];
-let funkyTimer = null, funkyStep = 0;
+// funky mode: zolang er iets bezig is, wisselt elk deel van de rand op zijn eigen tempo van kleur
 function syncFunky() {
   const on = $("funky").checked && !!(lanes.claude || lanes.gpu);
+  document.body.classList.toggle("funky", on);
   document.body.classList.toggle("surfing", on && !!lanes.claude);
-  if (on && !funkyTimer) {
-    const step = () => document.documentElement.style.setProperty("--orange", FUNKY[funkyStep++ % FUNKY.length]);
-    step(); funkyTimer = setInterval(step, 2500);
-  } else if (!on && funkyTimer) {
-    clearInterval(funkyTimer); funkyTimer = null;
-    document.documentElement.style.removeProperty("--orange");
-  }
 }
 
 function refreshUi() {
