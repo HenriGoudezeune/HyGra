@@ -3,7 +3,7 @@ shortcut from install_shortcut.py).
 
 A native window (pywebview, Edge WebView2) around web/index.html; the page calls Python
 directly through `window.pywebview.api`. Two kinds of partner:
-- Claude Opus 5.5 (cloud, Anthropic API key): a real chat.
+- Claude Opus 5.5 through Claude Code and the user's Claude subscription: a real chat.
 - the local NCM models: code completers that write the next chunks coarse-to-fine.
   Only one of them sits on the GPU at a time (4 GB).
 """
@@ -50,18 +50,11 @@ class Api:
         gpu = torch.cuda.get_device_name(0) if self.dev == "cuda" else "CPU"
         return {"device": gpu, "models": [k for k, v in MODELS.items() if os.path.exists(v)]}
 
-    # ----- Claude
-    def has_key(self):
-        return bool(claude_chat.get_key())
+    # ----- Claude (through Claude Code and the user's subscription)
+    def has_claude(self):
+        return claude_chat.available()
 
-    def save_key(self, key):
-        err = claude_chat.check_key(key)
-        if err:
-            return {"error": err}
-        claude_chat.set_key(key)
-        return {"ok": True}
-
-    def claude(self, history, msg_id):
+    def claude(self, session_id, first, prompt, msg_id):
         """Streams the reply into the page (hygra.delta / hygra.status) and returns the final turn."""
         buf, last = [], [time.time()]
 
@@ -80,7 +73,7 @@ class Api:
             if self._window:
                 self._window.evaluate_js(f"hygra.status({json.dumps(msg_id)}, {json.dumps(s)})")
 
-        res = claude_chat.reply(history, on_text, on_status)
+        res = claude_chat.reply(session_id, bool(first), prompt, on_text, on_status)
         flush()
         return res
 

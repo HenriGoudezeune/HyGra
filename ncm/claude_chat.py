@@ -1,88 +1,66 @@
-"""Claude Opus 5.5 as a chat partner in the app (needs an Anthropic API key).
+"""Claude Opus 5.5 as a chat partner in the app, through the local Claude Code CLI.
 
-The key lives in the Windows Credential Manager (keyring), or in ANTHROPIC_API_KEY;
-it is never written to the repo. Assistant turns are kept exactly as the API returned
-them (thinking and fallback blocks included) and sent back unchanged, so the history
-stays append-only.
+The CLI is logged in with the user's Claude subscription (Pro/Max), so chatting costs
+nothing extra and counts toward the plan's normal usage limits; no API key is needed.
+Each HyGra chat is one Claude Code session (`--session-id` on the first message,
+`--resume` afterwards), run with every tool switched off: a plain conversation.
 """
+import json
 import os
+import shutil
+import subprocess
 
-import anthropic
-import keyring
-
-SERVICE = "HydrarGyrum HyGra"
 MODEL = "claude-opus-5-5"
-PRICE_IN, PRICE_OUT = 4.00, 20.00          # $ per million tokens (Claude Opus 5.5)
 SYSTEM = ("Je bent Claude, de assistent in HyGra, een desktop-app van HydrarGyrum. "
           "Antwoord in de taal van de gebruiker (meestal Nederlands), helder en to the point. "
           "Gebruik Markdown; zet code altijd in een codeblok met de taal erbij.")
+# a folder of its own, so no project CLAUDE.md or settings leak into the chats
+WORKDIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "HyGra", "chat")
 
 
-def get_key():
-    try:
-        return os.environ.get("ANTHROPIC_API_KEY") or keyring.get_password(SERVICE, "anthropic")
-    except keyring.errors.KeyringError:
-        return os.environ.get("ANTHROPIC_API_KEY")
+def available():
+    return shutil.which("claude") is not None
 
 
-def set_key(key):
-    keyring.set_password(SERVICE, "anthropic", key.strip())
-
-
-def check_key(key):
-    """Cheap validity check: list one model."""
-    try:
-        anthropic.Anthropic(api_key=key.strip(), max_retries=0).models.list(limit=1)
-        return None
-    except anthropic.AuthenticationError:
-        return "Deze sleutel wordt geweigerd."
-    except anthropic.APIConnectionError:
-        return "Geen verbinding met Anthropic."
-    except anthropic.APIStatusError as e:
-        return f"Fout {e.status_code}: {e.message}"
-
-
-def reply(history, on_text, on_status):
-    """history: API messages (user strings, assistant content lists as returned before).
-    Streams text through on_text; returns the assistant content to store, usage and cost."""
-    key = get_key()
-    if not key:
-        return {"error": "nokey"}
-    client = anthropic.Anthropic(api_key=key)
-    try:
-        with client.beta.messages.stream(
-            model=MODEL,
-            max_tokens=64000,
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",                       # a declined request is retried on Anthropic's fallback model
-            thinking={"type": "adaptive", "display": "summarized"},
-            output_config={"effort": "medium"},
-            system=SYSTEM,
-            messages=history,
-        ) as stream:
-            for event in stream:
-                if event.type == "content_block_start" and event.content_block.type == "thinking":
-                    on_status("denkt na")
-                elif event.type == "content_block_start" and event.content_block.type == "text":
-                    on_status("schrijft")
-                elif event.type == "content_block_delta" and event.delta.type == "text_delta":
-                    on_text(event.delta.text)
-            msg = stream.get_final_message()
-    except anthropic.AuthenticationError:
-        return {"error": "nokey"}
-    except anthropic.RateLimitError:
-        return {"error": "Even te veel verzoeken; probeer het zo opnieuw."}
-    except anthropic.APIStatusError as e:
-        return {"error": f"Fout {e.status_code}: {e.message}"}
-    except anthropic.APIConnectionError:
-        return {"error": "Geen verbinding met Anthropic (internet?)."}
-
-    if msg.stop_reason == "refusal":
-        return {"error": "Claude weigerde dit verzoek.", "raw": [b.model_dump(by_alias=True, exclude_none=True) for b in msg.content]}
-    u = msg.usage
-    tokens_in = (u.input_tokens or 0) + (u.cache_read_input_tokens or 0) + (u.cache_creation_input_tokens or 0)
-    cost = ((u.input_tokens or 0) + 0.1 * (u.cache_read_input_tokens or 0) + 1.25 * (u.cache_creation_input_tokens or 0)) \
-        * PRICE_IN / 1e6 + (u.output_tokens or 0) * PRICE_OUT / 1e6
-    text = "".join(b.text for b in msg.content if b.type == "text")
-    return {"text": text, "raw": [b.model_dump(by_alias=True, exclude_none=True) for b in msg.content],
-            "tokens_in": tokens_in, "tokens_out": u.output_tokens, "cost": round(cost, 4), "model": msg.model}
+def reply(session_id, first, prompt, on_text, on_status):
+    """Streams the answer through on_text; returns the final text and token counts, or an error."""
+    exe = shutil.which("claude")
+    if not exe:
+        return {"error": "Claude Code (de 'claude'-opdracht) is niet gevonden. Installeer het en log in met je Pro-account."}
+    os.makedirs(WORKDIR, exist_ok=True)
+    cmd = [exe, "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
+           "--model", MODEL, "--tools", "", "--system-prompt", SYSTEM, "--disable-slash-commands",
+           "--strict-mcp-config", "--setting-sources", "",
+           "--session-id" if first else "--resume", session_id]
+    # never fall back to paid API billing: only the subscription login may be used
+    env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
+    proc = subprocess.Popen(cmd, cwd=WORKDIR, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    proc.stdin.write(prompt)
+    proc.stdin.close()
+    result, text = None, []
+    for line in proc.stdout:
+        try:
+            e = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if e.get("type") == "stream_event":
+            ev = e["event"]
+            if ev["type"] == "content_block_start":
+                on_status("denkt na" if ev["content_block"]["type"] == "thinking" else "schrijft")
+            elif ev["type"] == "content_block_delta" and ev["delta"].get("type") == "text_delta":
+                text.append(ev["delta"]["text"])
+                on_text(ev["delta"]["text"])
+        elif e.get("type") == "result":
+            result = e
+    proc.wait()
+    if result is None:
+        err = proc.stderr.read().strip()
+        return {"error": err or f"Claude Code stopte onverwacht (code {proc.returncode})."}
+    if result.get("is_error"):
+        return {"error": result.get("result") or "Claude Code gaf een fout (gebruikslimiet bereikt?)."}
+    u = result.get("usage") or {}
+    tokens_in = (u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0) + (u.get("cache_creation_input_tokens") or 0)
+    return {"text": result.get("result") or "".join(text), "tokens_in": tokens_in,
+            "tokens_out": u.get("output_tokens") or 0}

@@ -16,14 +16,14 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--olive); color: var(--text); font-family: 'Chakra Petch', system-ui, sans-serif; }
 button, select, textarea, input { font-family: inherit; }
-.app { min-height: 100vh; display: flex; flex-wrap: wrap; border: var(--line) solid var(--orange); }
+.app { height: 100vh; overflow: hidden; display: flex; flex-wrap: wrap; border: var(--line) solid var(--orange); }
 .cut { clip-path: polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px); }
 .cut-in { clip-path: polygon(13px 0,100% 0,100% calc(100% - 13px),calc(100% - 13px) 100%,0 100%,0 13px); }
 .cut-sm { clip-path: polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px); }
 .hidden { display: none !important; }
 
 /* zijbalk */
-aside { flex: 1 1 280px; max-width: 100%; padding: 26px 24px; background: var(--olive-deep);
+aside { flex: 1 1 280px; max-width: 100%; max-height: 100%; overflow-y: auto; padding: 26px 24px; background: var(--olive-deep);
   border-right: var(--line) solid var(--orange); display: flex; flex-direction: column; gap: 26px; }
 .brand { display: flex; align-items: center; gap: 14px; }
 .brand b { display: block; font-size: 30px; letter-spacing: 3px; line-height: 1; }
@@ -41,15 +41,13 @@ nav button.on { background: var(--olive); border-left-color: var(--orange); colo
 nav button:hover { color: var(--text); }
 .settings { display: flex; flex-direction: column; gap: 18px; margin-top: auto; padding-top: 22px; border-top: 4px solid var(--orange); }
 .settings label { display: flex; flex-direction: column; gap: 8px; font-size: 14px; letter-spacing: 1px; color: var(--mustard); font-weight: 600; }
-select { min-height: 44px; background: var(--olive); color: var(--text); border: 4px solid var(--orange); border-radius: 0; font-size: 16px; padding: 0 10px; }
-input[type=range] { accent-color: var(--orange); }
+select { min-height: 44px; width: 100%; background-color: var(--olive); color: var(--text); border: 4px solid var(--orange); border-radius: 0; font-size: 15px; }
 .check { flex-direction: row !important; align-items: center; gap: 12px !important; min-height: 44px; color: var(--text) !important; font-weight: 500 !important; cursor: pointer; }
-.check input { width: 22px; height: 22px; accent-color: var(--orange); }
 .linkbtn { background: none; border: 0; color: var(--text-mute); font-size: 14px; text-align: left; padding: 8px 0; min-height: 44px; cursor: pointer; display: flex; gap: 8px; align-items: center; }
 .linkbtn:hover { color: var(--text); }
 
 /* gesprek */
-main { flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; height: 100vh; }
+main { flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; height: 100%; }
 header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 22px 36px; border-bottom: var(--line) solid var(--orange); }
 h1 { margin: 0; font-size: 30px; letter-spacing: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%; }
 .status { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--mint); letter-spacing: 1px; font-weight: 600; padding: 6px 0; }
@@ -127,11 +125,36 @@ textarea::placeholder { color: var(--text-mute); }
 textarea:disabled { opacity: .6; }
 .send { flex: 0 0 76px; min-height: 64px; background: var(--orange); border: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .send:hover { background: var(--mustard); }
-.send:disabled { opacity: .6; cursor: wait; }
+.send:disabled { opacity: .6; cursor: progress; }
+/* details: hoekige scrollbars, keuzelijst, schuifregelaars, vinkje */
+::-webkit-scrollbar { width: 14px; height: 14px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: var(--olive-deep); }
+::-webkit-scrollbar-thumb { background: var(--orange); border: 4px solid var(--olive-deep); min-height: 40px; }
+::-webkit-scrollbar-thumb:hover { background: var(--mustard); }
+::-webkit-scrollbar-button { display: none; }
+::selection { background: var(--orange); color: var(--olive-deep); }
+select { -webkit-appearance: none; appearance: none; cursor: pointer; padding: 0 40px 0 12px; font-weight: 600;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='10' viewBox='0 0 16 10'%3E%3Cpath d='M1 1 L8 8 L15 1' stroke='%23FF7A1A' stroke-width='3' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; }
+select:hover { border-color: var(--mustard); }
+select option { background: var(--olive-deep); color: var(--text); }
+input[type=range] { -webkit-appearance: none; appearance: none; height: 28px; background: transparent; cursor: pointer; margin: 0; }
+input[type=range]::-webkit-slider-runnable-track { height: 6px; background: var(--olive-line); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 24px; margin-top: -9px; background: var(--orange);
+  clip-path: polygon(0 0, 100% 0, 100% 65%, 50% 100%, 0 65%); }
+input[type=range]:hover::-webkit-slider-thumb { background: var(--mustard); }
+.check input { -webkit-appearance: none; appearance: none; flex: 0 0 auto; width: 24px; height: 24px; margin: 0; cursor: pointer;
+  border: 4px solid var(--orange); background: var(--olive); display: grid; place-content: center; }
+.check input::after { content: ""; width: 10px; height: 10px; background: var(--orange); transform: scale(0); transition: transform .1s; }
+.check input:checked::after { transform: scale(1); }
+nav button .t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+nav button .run { flex: 0 0 auto; width: 10px; height: 10px; background: var(--orange); animation: blink .8s infinite steps(2); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 :focus-visible { outline: 3px solid var(--mint); outline-offset: 2px; }
 @media (max-width: 860px) {
+  .app { height: auto; min-height: 100vh; overflow: visible; }
   main { height: auto; min-height: 100vh; }
+  aside { max-height: none; }
   aside { border-right: 0; border-bottom: var(--line) solid var(--orange); padding: 20px 16px; }
   header, #log, form { padding-left: 16px; padding-right: 16px; }
 }
@@ -164,9 +187,9 @@ textarea:disabled { opacity: .6; }
     <div class="settings">
       <label>MODEL
         <select id="model">
-          <option value="claude">Claude Opus 5.5 · cloud</option>
-          <option value="qwen">Qwen-NCM · 0.5B · lokaal</option>
-          <option value="ncm">NCM · 34M · lokaal</option>
+          <option value="claude">Claude Opus 5.5 · Pro</option>
+          <option value="qwen">Qwen-NCM · lokaal</option>
+          <option value="ncm">NCM 34M · lokaal</option>
         </select>
       </label>
       <div id="local-opts" style="display:flex;flex-direction:column;gap:18px">
@@ -190,10 +213,6 @@ textarea:disabled { opacity: .6; }
           Toon de 9 niveaus
         </label>
       </div>
-      <button class="linkbtn" id="keybtn" type="button">
-        <svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path d="M2 2 L10 2 L10 12 L2 12 Z M10 7 L21 7 M17 7 L17 12 M20 7 L20 11" stroke="#7FE0C8" stroke-width="3" fill="none"/></svg>
-        API-sleutel voor Claude wijzigen
-      </button>
     </div>
   </aside>
 
@@ -266,10 +285,18 @@ const $ = (id) => document.getElementById(id);
 const COLORS = ["#FF7A1A", "#FF7A1A", "#F2C14E", "#F2C14E", "#F2C14E", "#7FE0C8", "#7FE0C8", "#7FE0C8", "#7FE0C8"];
 const NAMES = ["1 code", "2", "4", "8", "16", "32", "48", "64", "64 codes"];
 const MODEL_LABEL = { claude: "CLAUDE OPUS 5.5", qwen: "QWEN-NCM", ncm: "NCM 34M" };
-let chats = loadChats(), current = null, deviceName = "", hasKey = false;
+let chats = loadChats(), current = null, deviceName = "", hasClaude = true;
+// running work per lane: Claude (cloud) and the GPU (one local model at a time) run side by side
+const lanes = { claude: null, gpu: null };
+const failed = new Set();
+let onGpu = null, clock = null;
+const laneOf = (model) => model === "claude" ? "claude" : "gpu";
 
 function loadChats() { try { return JSON.parse(localStorage.getItem("hygra-chats")) || []; } catch { return []; } }
-function save() { try { localStorage.setItem("hygra-chats", JSON.stringify(chats.slice(0, 40))); } catch {} }
+function save() {
+  const done = chats.slice(0, 40).map((c) => ({ ...c, turns: c.turns.filter((t) => !t.pending) }));
+  try { localStorage.setItem("hygra-chats", JSON.stringify(done)); } catch {}
+}
 function titleOf(text) {
   const m = text.match(/(?:def|class)\s+(\w+)/);
   return m ? m[1] : text.trim().split("\n")[0].slice(0, 36) || "gesprek";
@@ -326,8 +353,9 @@ function renderHistory() {
     const b = document.createElement("button");
     b.className = c === current ? "on" : "";
     b.innerHTML = '<svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true" style="flex:0 0 auto"><path d="M1 12 L6 3 L10 10 L17 1" stroke="' + (c === current ? "#FF7A1A" : "#BFB27E") + '" stroke-width="3" fill="none"/></svg>';
-    b.append(document.createTextNode(c.title));
-    b.onclick = () => { if (!busy) { current = c; renderAll(); } };
+    const t = document.createElement("span"); t.className = "t"; t.textContent = c.title; b.append(t);
+    if (c.turns.some((x) => x.pending)) { const r = document.createElement("span"); r.className = "run"; r.title = "bezig"; b.append(r); }
+    b.onclick = () => { current = c; renderAll(); };
     box.append(b);
   });
 }
@@ -336,36 +364,25 @@ function renderAll() {
   $("title").textContent = current ? current.title : "Nieuw gesprek";
   $("log").replaceChildren();
   if (!current || !current.turns.length) renderEmpty();
-  else current.turns.forEach((t) => { addMe(t.prompt); addBot(t); });
+  else current.turns.forEach((t) => { addMe(t.prompt); if (t.pending) $("log").append(t.pending.node); else addBot(t); });
+  syncLoadCard(); scrollDown();
   renderHistory();
 }
 
 function renderEmpty() {
-  if (isClaude() && !hasKey) return showKeyCard();
+  if (isClaude() && !hasClaude) return showNoClaude();
   const p = document.createElement("p"); p.className = "empty";
   p.innerHTML = isClaude()
-    ? 'Stel <b>Claude Opus 5.5</b> gelijk welke vraag: uitleg, code, tekst, vertalingen…<br>Enter = versturen, Shift+Enter = nieuwe regel.'
+    ? 'Stel <b>Claude Opus 5.5</b> gelijk welke vraag: uitleg, code, tekst, vertalingen…<br>Het loopt via je Claude Pro-abonnement: geen extra kosten, wel binnen je gewone gebruikslimiet.<br>Enter = versturen, Shift+Enter = nieuwe regel.'
     : 'Typ het <b>begin van wat Python</b>, bv. <code>def is_priem(n):</code>. Het NCM-model schrijft per stuk van 128 tokens verder, telkens in <b>9 stappen van grof naar fijn</b>. (Experimenteel: verwacht vooral rommel.)';
   $("log").append(p);
 }
 
-function showKeyCard() {
+function showNoClaude() {
   const card = document.createElement("div"); card.className = "keycard cut";
-  card.innerHTML = '<div class="cut-in"><h2>API-SLEUTEL NODIG</h2>' +
-    '<p>Voor Claude heeft HyGra een Anthropic API-sleutel nodig (console.anthropic.com → API keys). Die wordt veilig bewaard in Windows Credential Manager, nooit in een bestand. Elk bericht kost een klein bedrag; HyGra toont de kost bij elk antwoord.</p>' +
-    '<div class="row"><label class="sr" for="keyin">API-sleutel</label><input id="keyin" type="password" placeholder="sk-ant-…" autocomplete="off"><button type="button" id="keysave">BEWAAR</button></div>' +
-    '<span class="msgline" id="keymsg"></span></div>';
+  card.innerHTML = '<div class="cut-in"><h2>CLAUDE CODE NIET GEVONDEN</h2>' +
+    '<p>HyGra praat met Claude via Claude Code, ingelogd met je Pro-abonnement. Installeer Claude Code, log één keer in met <code>claude</code> in een terminal, en herstart HyGra.</p></div>';
   $("log").replaceChildren(card);
-  const go = async () => {
-    const k = $("keyin").value.trim(); if (!k) return;
-    $("keymsg").textContent = "Controleren…";
-    const r = await api().save_key(k);
-    if (r.error) { $("keymsg").textContent = r.error; return; }
-    hasKey = true; renderAll(); setStatus("KLAAR · CLAUDE");
-  };
-  $("keysave").onclick = go;
-  $("keyin").addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
-  $("keyin").focus();
 }
 
 /* --- berichten --- */
@@ -391,8 +408,8 @@ function fillBot(n, t) {
     : MODEL_LABEL[t.model] + " · " + (t.chunks || 0) + " CHUNK" + (t.chunks === 1 ? "" : "S") + " · 9 STAPPEN ELK";
   n.querySelector(".copy").onclick = () => navigator.clipboard && navigator.clipboard.writeText(t.model === "claude" ? (t.text || "") : t.prompt + (t.completion || ""));
   const foot = n.querySelector(".foot");
-  foot.textContent = t.model === "claude" && t.cost != null
-    ? (t.tokens_in || 0).toLocaleString("nl-BE") + " → " + (t.tokens_out || 0).toLocaleString("nl-BE") + " tokens · ± $" + t.cost.toFixed(4).replace(".", ",") + " · " + (t.seconds || 0).toFixed(1).replace(".", ",") + " s"
+  foot.textContent = t.model === "claude" && !t.error
+    ? (t.tokens_in || 0).toLocaleString("nl-BE") + " → " + (t.tokens_out || 0).toLocaleString("nl-BE") + " tokens · via Pro, geen extra kost · " + (t.seconds || 0).toFixed(1).replace(".", ",") + " s"
     : "";
   const lv = n.querySelector(".levels"), view = n.querySelector(".level-view");
   lv.replaceChildren();
@@ -419,113 +436,131 @@ function fillBot(n, t) {
 function addBot(t) { const n = botNode(t.model); fillBot(n, t); $("log").append(n); scrollDown(); }
 function scrollDown() { const l = $("log"); l.scrollTop = l.scrollHeight; }
 
-/* --- bezig-indicator --- */
-let busy = false, busyCard = null, busyTimer = null, busyStart = 0, live = null;
-function setBusy(on, kind) {
-  busy = on;
-  $("send").disabled = on; $("prompt").disabled = on; $("model").disabled = on;
-  $("send").querySelector(".i-send").style.display = on ? "none" : "";
-  $("send").querySelector(".i-wait").style.display = on ? "" : "none";
-  $("status").classList.toggle("busy-pill", on);
-  clearInterval(busyTimer);
-  if (busyCard) busyCard.remove();
-  busyCard = null;
-  if (!on) return;
-  setStatus(kind === "load" ? "MODEL LADEN" : kind === "claude" ? "DENKT NA" : "BEZIG");
-  busyStart = Date.now();
-  busyTimer = setInterval(tickClock, 100);
-  if (kind === "claude") return;     // Claude toont zijn voortgang in de antwoordbel zelf
-  busyCard = document.createElement("div"); busyCard.className = "msg";
-  busyCard.innerHTML = '<div class="busy cut" role="status"><div class="cut-in"><div class="head"><span class="blink"></span><span class="t"></span></div><div class="sub"></div><div class="bars"></div><div class="time">0,0 s</div></div></div>';
-  const bars = busyCard.querySelector(".bars");
+/* --- lopend werk: per baan (Claude / GPU) één taak, en je kan intussen vrij wisselen --- */
+const fmtTime = (j) => ((Date.now() - j.start) / 1000).toFixed(1).replace(".", ",") + " s";
+function tick() {
+  for (const j of Object.values(lanes)) if (j) {
+    const t = j.node.querySelector(".busy .time"); if (t) t.textContent = fmtTime(j);
+    if (j.kind === "claude") j.foot.textContent = j.state + " · " + fmtTime(j);
+  }
+  if (!lanes.claude && !lanes.gpu) { clearInterval(clock); clock = null; }
+}
+function startJob(lane, job) {
+  job.start = Date.now(); lanes[lane] = job;
+  if (!clock) clock = setInterval(tick, 100);
+  refreshUi();
+}
+function endJob(lane) { lanes[lane] = null; refreshUi(); }
+
+function busyCard(kind) {
+  const card = document.createElement("div"); card.className = "msg";
+  card.innerHTML = '<div class="busy cut" role="status"><div class="cut-in"><div class="head"><span class="blink"></span><span class="t"></span></div><div class="sub"></div><div class="bars"></div><div class="time">0,0 s</div></div></div>';
+  const bars = card.querySelector(".bars");
   COLORS.forEach((c, k) => { const b = document.createElement("span"); b.style.height = (12 + k * 4) + "px"; b.style.setProperty("--c", c); b.style.animationDelay = (k * .1) + "s"; bars.append(b); });
   if (kind === "load") {
     bars.classList.add("loading");
-    busyCard.querySelector(".t").textContent = "MODEL LADEN";
-    busyCard.querySelector(".sub").textContent = "Het model gaat naar de GPU. De eerste keer duurt dit even (±10–30 s).";
+    card.querySelector(".t").textContent = "MODEL LADEN";
+    card.querySelector(".sub").textContent = "Het model gaat naar de GPU. De eerste keer duurt dit even (±10–30 s).";
   } else {
-    busyCard.querySelector(".t").textContent = "BEZIG MET SCHRIJVEN";
-    busyCard.querySelector(".sub").textContent = "Grove schets eerst, details daarna…";
+    card.querySelector(".t").textContent = "BEZIG MET SCHRIJVEN";
+    card.querySelector(".sub").textContent = "Grove schets eerst, details daarna…";
   }
-  $("log").append(busyCard); scrollDown();
+  return card;
 }
-function tickClock() {
-  const s = ((Date.now() - busyStart) / 1000).toFixed(1).replace(".", ",") + " s";
-  if (busyCard) busyCard.querySelector(".time").textContent = s;
-  if (live) live.foot.textContent = live.state + " · " + s;
+
+// het laden van een model hoort bij geen enkel gesprek: toon het zolang een lokaal model gekozen is
+function syncLoadCard() {
+  const j = lanes.gpu;
+  if (!j || j.kind !== "load") return;
+  if (isClaude()) j.node.remove();
+  else if (!j.node.isConnected) { $("log").append(j.node); scrollDown(); }
 }
+
+function refreshUi() {
+  const lane = laneOf($("model").value), job = lanes[lane], other = lanes[lane === "claude" ? "gpu" : "claude"];
+  $("send").disabled = !!job;
+  $("send").querySelector(".i-send").style.display = job ? "none" : "";
+  $("send").querySelector(".i-wait").style.display = job ? "" : "none";
+  $("status").classList.toggle("busy-pill", !!job);
+  let s = job ? job.state
+    : isClaude() ? (hasClaude ? "KLAAR · CLAUDE PRO" : "CLAUDE CODE ONTBREEKT")
+    : failed.has($("model").value) ? "FOUT BIJ LADEN" : deviceName ? "KLAAR · " + deviceName : "OPSTARTEN";
+  if (other) s += other.kind === "claude" ? " · CLAUDE BEZIG" : " · LOKAAL BEZIG";
+  setStatus(s);
+}
+
 window.progress = (c, k, n) => {   // vanuit Python na elk niveau
-  if (!busyCard) return;
-  busyCard.querySelector(".sub").textContent = "Chunk " + (c + 1) + " van " + n + " · niveau " + (k + 1) + " van 9 klaar";
-  busyCard.querySelectorAll(".bars span").forEach((b, i) => b.classList.toggle("on", i <= k));
+  const j = lanes.gpu;
+  if (!j || j.kind !== "write") return;
+  j.node.querySelector(".sub").textContent = "Chunk " + (c + 1) + " van " + n + " · niveau " + (k + 1) + " van 9 klaar";
+  j.node.querySelectorAll(".bars span").forEach((b, i) => b.classList.toggle("on", i <= k));
 };
 
 /* --- Claude-streaming (vanuit Python) --- */
 window.hygra = {
   delta(id, text) {
-    if (!live || live.id !== id) return;
-    live.text += text; live.state = "SCHRIJFT"; setStatus("SCHRIJFT");
-    live.body.innerHTML = markdown(live.text) + '<span class="caret"></span>';
-    scrollDown();
+    const j = lanes.claude;
+    if (!j || j.id !== id) return;
+    j.text += text; j.state = "SCHRIJFT"; refreshUi();
+    j.body.innerHTML = markdown(j.text) + '<span class="caret"></span>';
+    if (j.node.isConnected) scrollDown();
   },
   status(id, s) {
-    if (!live || live.id !== id) return;
-    live.state = s === "denkt na" ? "DENKT NA" : "SCHRIJFT";
-    setStatus(live.state);
+    const j = lanes.claude;
+    if (!j || j.id !== id) return;
+    j.state = s === "denkt na" ? "DENKT NA" : "SCHRIJFT"; refreshUi();
   },
 };
 
-function claudeHistory(prompt) {
-  const msgs = [];
-  for (const t of current.turns) {
-    if (t.model !== "claude" || !t.raw || t.error) continue;   // alleen geslaagde Claude-beurten, ongewijzigd
-    msgs.push({ role: "user", content: t.prompt });
-    msgs.push({ role: "assistant", content: t.raw });
-  }
-  msgs.push({ role: "user", content: prompt });
-  return msgs;
+function newSessionId() {
+  return crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
 }
 
 async function send(e) {
   e.preventDefault();
-  const prompt = $("prompt").value;
-  if (!prompt.trim() || busy) return;
-  const model = $("model").value;
-  if (model === "claude" && !hasKey) return showKeyCard();
-  if (!current) { current = { title: titleOf(prompt), turns: [] }; chats.unshift(current); renderHistory(); }
-  if (!current.turns.length) $("log").replaceChildren();
-  $("title").textContent = current.title;
-  addMe(prompt); $("prompt").value = "";
-  let turn;
+  const prompt = $("prompt").value, model = $("model").value, lane = laneOf(model);
+  if (!prompt.trim() || lanes[lane]) return;
+  if (model === "claude" && !hasClaude) return showNoClaude();
+  if (!current) { current = { title: titleOf(prompt), turns: [] }; chats.unshift(current); }
+  const chat = current, turn = { prompt, model }, t0 = Date.now();
+  const job = { kind: model === "claude" ? "claude" : "write", model, chat, turn };
   if (model === "claude") {
-    const id = "m" + Date.now();
-    const n = botNode("claude");
-    n.querySelector(".what").textContent = "CLAUDE OPUS 5.5";
-    const body = n.querySelector(".body"); body.className = "body md"; body.innerHTML = '<span class="caret"></span>';
-    $("log").append(n); scrollDown();
-    live = { id, body, foot: n.querySelector(".foot"), text: "", state: "DENKT NA" };
-    const history = claudeHistory(prompt);
-    setBusy(true, "claude");
-    const t0 = Date.now();
-    try {
-      const r = await api().claude(history, id);
-      if (r.error === "nokey") { hasKey = false; r.error = "API-sleutel ontbreekt of is ongeldig. Klik links op 'API-sleutel voor Claude wijzigen'."; }
-      turn = { prompt, model, ...r, seconds: (Date.now() - t0) / 1000 };
-    } catch (err) { turn = { prompt, model, error: String(err) }; }
-    live = null; setBusy(false);
-    fillBot(n, turn);
+    job.id = "m" + t0; job.text = ""; job.state = "DENKT NA";
+    job.node = botNode("claude");
+    job.node.querySelector(".what").textContent = "CLAUDE OPUS 5.5";
+    job.body = job.node.querySelector(".body"); job.body.className = "body md"; job.body.innerHTML = '<span class="caret"></span>';
+    job.foot = job.node.querySelector(".foot");
   } else {
-    setBusy(true, "write");
-    try {
-      const j = await api().complete(prompt, model, +$("temp").value, +$("chunks").value);
-      turn = j.error ? { prompt, model, error: j.error } : { prompt, model, ...j };
-    } catch (err) { turn = { prompt, model, error: String(err) }; }
-    setBusy(false);
-    addBot(turn);
+    job.state = "BEZIG"; job.node = busyCard("write");
   }
-  setStatus("KLAAR · " + (model === "claude" ? "CLAUDE" : deviceName));
-  current.turns.push(turn); save(); renderHistory();
-  $("prompt").focus();
+  turn.pending = job; chat.turns.push(turn);
+  $("prompt").value = "";
+  startJob(lane, job);
+  renderAll();
+  let r;
+  try {
+    if (model === "claude") {
+      // één Claude Code-sessie per HyGra-gesprek; die onthoudt het gesprek zelf
+      const first = !chat.claudeSession;
+      if (first) chat.claudeSession = newSessionId();
+      r = await api().claude(chat.claudeSession, first, prompt, job.id);
+      if (r.error && first) delete chat.claudeSession;   // de sessie is nooit gestart
+    } else {
+      r = await api().complete(prompt, model, +$("temp").value, +$("chunks").value);
+      if (!r.error) { onGpu = model; failed.delete(model); }
+    }
+  } catch (err) { r = { error: String(err) }; }
+  delete turn.pending;
+  Object.assign(turn, r, { seconds: (Date.now() - t0) / 1000 });
+  endJob(lane);
+  if (job.node.isConnected) {
+    if (model === "claude") fillBot(job.node, turn);
+    else { const n = botNode(model); fillBot(n, turn); job.node.replaceWith(n); }
+    scrollDown();
+  }
+  save(); renderHistory();
+  if (lane === "gpu") warm();
 }
 
 function applyModel() {
@@ -535,30 +570,36 @@ function applyModel() {
     : "Typ het begin van een functie…  (Enter = versturen, Shift+Enter = nieuwe regel)";
 }
 
+// zorgt dat het gekozen lokale model op de GPU staat; is de GPU bezig, dan volgt het daarna
 async function warm() {
+  const model = $("model").value;
+  if (isClaude() || onGpu === model || failed.has(model) || lanes.gpu) return;
+  const job = { kind: "load", model, state: "MODEL LADEN", node: busyCard("load") };
+  startJob("gpu", job); syncLoadCard();
+  try { await api().warmup(model); onGpu = model; } catch (err) { failed.add(model); }
+  job.node.remove(); endJob("gpu");
+  warm();   // intussen een ander lokaal model gekozen?
+}
+
+function onModelChange() {
   applyModel();
   if (!current || !current.turns.length) renderAll();
-  if (isClaude()) { setStatus(hasKey ? "KLAAR · CLAUDE" : "SLEUTEL NODIG"); return; }
-  setBusy(true, "load");
-  let ok = true;
-  try { await api().warmup($("model").value); } catch (err) { ok = false; }
-  setBusy(false); setStatus(ok ? "KLAAR · " + deviceName : "FOUT BIJ LADEN");
+  syncLoadCard(); refreshUi(); warm();
 }
 
 window.addEventListener("pywebviewready", async () => {
   const info = await api().info();
   deviceName = info.device.replace("NVIDIA GeForce ", "").replace(" Laptop GPU", "").toUpperCase();
-  hasKey = await api().has_key();
+  hasClaude = await api().has_claude();
   [...$("model").options].forEach((o) => { if (o.value !== "claude" && !info.models.includes(o.value)) o.remove(); });
-  warm();
+  onModelChange();
 });
-$("model").onchange = warm;
+$("model").onchange = onModelChange;
 $("form").onsubmit = send;
 $("prompt").addEventListener("keydown", (e) => {   // Enter = versturen, Shift+Enter = nieuwe regel
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) send(e);
 });
-$("new").onclick = () => { if (busy) return; current = null; renderAll(); $("prompt").focus(); };
-$("keybtn").onclick = () => { if (!busy) { current = null; renderHistory(); showKeyCard(); } };
+$("new").onclick = () => { current = null; renderAll(); $("prompt").focus(); };
 $("temp").oninput = () => $("tval").textContent = (+$("temp").value).toFixed(1);
 $("chunks").oninput = () => $("cval").textContent = $("chunks").value;
 $("showlv").onchange = renderAll;

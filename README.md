@@ -4,7 +4,7 @@
 
 **HyGra** (from *HydrarGyrum*, Hg, element 80) is a desktop chat app plus an experiment.
 It tries to train a **Next-Concept Model (NCM)** for Python code on a single 4 GB laptop GPU (RTX 3050).
-The app also talks to **Claude Opus 5.5** through the Anthropic API, so it is useful while the experiment is not.
+The app also talks to **Claude Opus 5.5** through Claude Code and your Claude subscription, so it is useful while the experiment is not.
 
 Based on *Next-Concept Modeling: Fast, Parallel Coarse-to-Fine Text Generation*
 (Kumbong, Khare, Ré et al., Stanford / Hazy Research, arXiv 2610.14162,
@@ -66,7 +66,8 @@ uv run python install_shortcut.py   # icon + Start-menu / desktop shortcut "HyGr
 uv run python app.py                # or start it from the Start menu
 ```
 
-- **Claude:** needs an Anthropic API key. You enter it in the app, and it is stored in the Windows Credential Manager, never in a file. Every answer shows its token usage and approximate cost.
+- **Claude:** runs through the [Claude Code](https://claude.com/claude-code) CLI, logged in with your Claude Pro/Max subscription (run `claude` once in a terminal to log in). No API key and no extra cost: chats count toward your plan's normal usage limits. Each HyGra chat is one Claude Code session with all tools switched off, so Claude remembers the conversation but cannot touch your files. An `ANTHROPIC_API_KEY` in the environment is deliberately ignored, so it never falls back to paid API billing.
+- **Switching models:** Claude and the local GPU models run side by side; you can switch model or chat while an answer is still coming in.
 - **Local models:** need the checkpoints in `ckpt/` (see below).
 
 ## Training it yourself
