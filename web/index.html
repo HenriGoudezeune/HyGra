@@ -518,7 +518,9 @@ function looksLikePath(s) {
     || /^[\w.\-]+\.[A-Za-z0-9]{1,8}(?::\d+(?::\d+)?)?$/.test(s);
 }
 function linkFiles(root, cwd) {
-  const key = (cwd || "") + "|";
+  // folders of files already linked in this chat: a relative path is looked up there too
+  const bases = [...new Set([...$("log").querySelectorAll("a.file")].map((a) => a.dataset.full.replace(/[\\/][^\\/]*$/, "")))].sort();
+  const key = (cwd || "") + "|" + bases.join(";") + "|";
   root.querySelectorAll("code").forEach((c) => {
     const s = c.textContent.trim();
     if (!c.closest("pre, a, [data-p]") && looksLikePath(s)) c.dataset.p = s;
@@ -536,16 +538,17 @@ function linkFiles(root, cwd) {
     });
     if (i) { frag.append(s.slice(i)); n.replaceWith(frag); }
   });
-  const ask = [];
+  const ask = []; let made = 0;
   root.querySelectorAll("[data-p]").forEach((el) => {
     const k = key + el.dataset.p;
     if (!pathCache.has(k)) { if (!pathAsking.has(k)) { pathAsking.add(k); ask.push(el.dataset.p); } return; }
     const full = pathCache.get(k);
     if (!full) return;
     const a = document.createElement("a"); a.className = "file"; a.href = "#"; a.dataset.full = full; a.title = full;
-    el.replaceWith(a); a.append(el); delete el.dataset.p;
+    el.replaceWith(a); a.append(el); delete el.dataset.p; made++;
   });
-  if (ask.length) api().paths(ask, cwd || null).then((r) => {
+  if (made && root.querySelector("[data-p]")) return linkFiles(root, cwd);   // new folders: try the rest again there
+  if (ask.length) api().paths(ask, cwd || null, bases).then((r) => {
     ask.forEach((s) => { pathCache.set(key + s, r[s] || null); pathAsking.delete(key + s); });
     if (root.isConnected) linkFiles(root, cwd);
   }).catch(() => ask.forEach((s) => pathAsking.delete(key + s)));

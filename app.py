@@ -97,9 +97,10 @@ class Api:
         return res
 
     # ----- files named in a reply: links only for files that really exist
-    def paths(self, items, cwd=None):
-        """Maps each mention (absolute, ~, relative to the chat folder, file:///, with :line) to its full path, or None."""
-        return {s: _resolve(s, cwd) for s in items}
+    def paths(self, items, cwd=None, bases=()):
+        """Maps each mention (absolute, ~, file:///, with :line) to its full path, or None. A relative one is tried
+        in the chat folder, then in the folders (and their parents) of files the chat already linked to."""
+        return {s: _resolve(s, cwd, bases) for s in items}
 
     def open_path(self, path):
         try:
@@ -148,17 +149,27 @@ class Api:
             return {"error": str(e)}
 
 
-def _resolve(s, cwd=None):
+def _resolve(s, cwd=None, bases=()):
     p = urllib.parse.unquote(s.strip().strip("`'\"<>"))
     p = re.sub(r"^file:/*", "", p, flags=re.I)
     p = re.sub(r"(#L\d+.*|:\d+(:\d+)?(-\d+)?)$", "", p)   # file.py:12, file.py:12:3, file.py#L12
     if re.match(r"^[a-z]+://", p, re.I) or not p:
         return None
     p = os.path.expanduser(p)
-    if not os.path.isabs(p):
-        p = os.path.join(cwd if cwd and os.path.isdir(cwd) else claude_chat.WORKDIR, p)
-    p = os.path.normpath(p)
-    return p if os.path.exists(p) else None
+    if os.path.isabs(p):
+        return os.path.normpath(p) if os.path.exists(p) else None
+    home = claude_chat.WORKDIR
+    dirs = [cwd if cwd and os.path.isdir(cwd) else home]
+    for b in bases:   # web/index.html after C:/.../ncm-code/app.py: try ncm-code, then up to (not past) home
+        b = os.path.normpath(b)
+        while b not in dirs and os.path.dirname(b) != b and os.path.normcase(b) != os.path.normcase(home):
+            dirs.append(b)
+            b = os.path.dirname(b)
+    for d in dirs:
+        q = os.path.normpath(os.path.join(d, p))
+        if os.path.exists(q):
+            return q
+    return None
 
 
 def set_icon(window):
