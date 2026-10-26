@@ -1,4 +1,4 @@
-# Logs GPU temperature every 30 s; stops training if the GPU stays >= 87 C for a minute.
+﻿# Logs GPU temperature every 30 s; stops training if the GPU stays >= 87 C for a minute.
 param([int]$StopTemp = 87, [int]$WarnTemp = 80)
 $log = Join-Path $PSScriptRoot "logs\gpu_temp.log"
 $hot = 0
@@ -10,7 +10,7 @@ while ($true) {
         if ($t -ge $StopTemp) { $hot++ } else { $hot = 0 }
         if ($hot -ge 2) {
             Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
-                Where-Object { $_.CommandLine -match 'train_(tokenizer|generator)' } |
+                Where-Object { $_.CommandLine -match 'train_(tokenizer|generator|lora)' } |
                 ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
             $line += " STOPPED-TRAINING"
             $hot = 0

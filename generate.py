@@ -4,8 +4,8 @@ import time
 
 import torch
 
+from eval_code import load, next_chunk
 from ncm.data import get_encoder
-from ncm.model import GenConfig, NCMGenerator, VQConfig, VQVAE
 
 p = argparse.ArgumentParser()
 p.add_argument("--prompt", default="def fibonacci(n):\n")
@@ -23,17 +23,11 @@ args = p.parse_args()
 if args.seed is not None:
     torch.manual_seed(args.seed)
 dev = "cuda" if torch.cuda.is_available() else "cpu"
-ck = torch.load(args.tokenizer, map_location=dev)
-vcfg = VQConfig(**ck["cfg"])
-vq = VQVAE(vcfg).to(dev).eval()
-vq.load_state_dict(ck["model"])
-gk = torch.load(args.generator, map_location=dev)
-gen = NCMGenerator(GenConfig(**gk["cfg"]), vcfg).to(dev).eval()
-gen.load_state_dict(gk["model"])
+vq, gen = load(args, dev)
+vcfg = vq.cfg
 
 enc = get_encoder(args.data)
 L, eot = vcfg.context_length, enc.eot_token
-W = gen.cfg.prefix_chunks * L
 prompt = open(args.prompt_file, encoding="utf-8").read() if args.prompt_file else args.prompt
 context = enc.encode_ordinary(prompt)
 out = []
@@ -41,15 +35,11 @@ out = []
 t0 = time.time()
 with torch.no_grad():
     for c in range(args.chunks):
-        window = (context + out)[-W:]
-        window = [eot] * (W - len(window)) + window
-        prefix_z = vq.encode_chunks(torch.tensor([window], device=dev))
-        f_hat, cums = gen.generate(prefix_z, vq.quant, args.temperature, args.top_k)
+        new, cums = next_chunk(vq, gen, enc, context + out, args.temperature, args.top_k, dev)
         if args.show_levels:
             for k, cum in enumerate(cums):
                 text = enc.decode(vq.decode(cum).argmax(-1)[0].tolist())
                 print(f"--- chunk {c} level {k} ({vcfg.levels[k]} codes) ---\n{text}\n")
-        new = vq.decode(f_hat).argmax(-1)[0].tolist()
         if eot in new:
             out += new[:new.index(eot)]
             break

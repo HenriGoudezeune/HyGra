@@ -59,22 +59,36 @@ def load(args, dev):
     vq = VQVAE(vcfg).to(dev).eval()
     vq.load_state_dict(ck["model"])
     gk = torch.load(args.generator, map_location=dev)
-    gen = NCMGenerator(GenConfig(**gk["cfg"]), vcfg).to(dev).eval()
-    gen.load_state_dict(gk["model"])
+    if gk.get("kind") == "qwen":
+        from ncm.qwen_gen import QwenConceptGenerator, QwenGenConfig
+        gen = QwenConceptGenerator(QwenGenConfig(**gk["cfg"]), vcfg).to(dev).eval()
+        gen.load_state_dict(gk["model"], strict=False)
+    else:
+        gen = NCMGenerator(GenConfig(**gk["cfg"]), vcfg).to(dev).eval()
+        gen.load_state_dict(gk["model"])
     return vq, gen
+
+
+def next_chunk(vq, gen, enc, context, temperature, top_k, dev):
+    """Stage-1 BPE ids of the context -> ids of the next chunk."""
+    if hasattr(gen, "encode_prefix"):   # Qwen backbone reads the text itself
+        prefix = gen.encode_prefix([enc.decode(context)], dev)
+    else:
+        L, W = vq.cfg.context_length, gen.cfg.prefix_chunks * vq.cfg.context_length
+        window = context[-W:]
+        window = [enc.eot_token] * (W - len(window)) + window
+        prefix = vq.encode_chunks(torch.tensor([window], device=dev))
+    with torch.autocast("cuda", dtype=torch.bfloat16, enabled=dev == "cuda"):
+        f_hat, cums = gen.generate(prefix, vq.quant, temperature, top_k)
+    return vq.decode(f_hat).argmax(-1)[0].tolist(), cums
 
 
 @torch.no_grad()
 def complete(vq, gen, enc, prompt, chunks, temperature, top_k, dev):
-    L, eot = vq.cfg.context_length, enc.eot_token
-    W = gen.cfg.prefix_chunks * L
+    eot = enc.eot_token
     context, out = enc.encode_ordinary(prompt), []
     for _ in range(chunks):
-        window = (context + out)[-W:]
-        window = [eot] * (W - len(window)) + window
-        f_hat, _ = gen.generate(vq.encode_chunks(torch.tensor([window], device=dev)), vq.quant,
-                                temperature, top_k)
-        new = vq.decode(f_hat).argmax(-1)[0].tolist()
+        new, _ = next_chunk(vq, gen, enc, context + out, temperature, top_k, dev)
         if eot in new:
             return enc.decode(out + new[:new.index(eot)])
         out += new

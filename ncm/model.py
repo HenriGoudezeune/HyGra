@@ -201,7 +201,49 @@ class VQVAE(nn.Module):
         return ce, vq_loss, acc, idxs
 
 
-class NCMGenerator(nn.Module):
+class CoarseToFine(nn.Module):
+    """Shared loss and coarse-to-fine sampling for generators with
+    forward(prefix, level_inputs) -> per-level logits and a `levels` list."""
+
+    def loss(self, prefix, quant: MultiScaleRVQ, idxs, cums):
+        level_inputs = [quant.down(cums[k - 1], self.levels[k]) for k in range(1, len(self.levels))]
+        logits = self.forward(prefix, level_inputs)
+        per_level = torch.stack([F.cross_entropy(lg.float().reshape(-1, lg.size(-1)), t.reshape(-1))
+                                 for lg, t in zip(logits, idxs)])
+        sizes = torch.tensor(self.levels, device=per_level.device, dtype=per_level.dtype)
+        token_mean = (per_level * sizes).sum() / sizes.sum()
+        # coarse levels hold few positions but decide what the chunk is about: give every level
+        # equal weight in half of the loss instead of letting the 64-code levels dominate
+        loss = 0.5 * per_level.mean() + 0.5 * token_mean
+        hits = sum((lg.argmax(-1) == t).float().sum() for lg, t in zip(logits, idxs))
+        acc = hits / sizes.sum() / idxs[0].size(0)
+        return loss, acc
+
+    @torch.no_grad()
+    def generate(self, prefix, quant: MultiScaleRVQ, temperature=1.0, top_k=50):
+        """Coarse-to-fine: one forward pass per level. Returns final f_hat and cumulative f_hats."""
+        B, dev = self.batch_info(prefix)
+        f_hat = torch.zeros(B, quant.T, quant.dim, device=dev)
+        level_inputs, cums = [], []
+        for k in range(len(self.levels)):
+            logits = self.forward(prefix, level_inputs)[k].float()
+            if temperature <= 0:
+                idx = logits.argmax(-1)
+            else:
+                logits = logits / temperature
+                if top_k:
+                    v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                    logits[logits < v[..., -1:]] = -float("inf")
+                probs = F.softmax(logits, dim=-1)
+                idx = torch.multinomial(probs.reshape(-1, probs.size(-1)), 1).view(B, -1)
+            f_hat = f_hat + quant.level_contribution(k, idx).float()
+            cums.append(f_hat)
+            if k + 1 < len(self.levels):
+                level_inputs.append(quant.down(f_hat, self.levels[k + 1]))
+        return f_hat, cums
+
+
+class NCMGenerator(CoarseToFine):
     """Block-causal transformer over [prefix | level_0 | level_1 | ...]."""
 
     def __init__(self, cfg: GenConfig, vq: VQConfig):
@@ -242,39 +284,5 @@ class NCMGenerator(nn.Module):
             start += l
         return logits
 
-    def loss(self, prefix_z, quant: MultiScaleRVQ, idxs, cums):
-        level_inputs = [quant.down(cums[k - 1], self.levels[k]) for k in range(1, len(self.levels))]
-        logits = self.forward(prefix_z, level_inputs)
-        per_level = torch.stack([F.cross_entropy(lg.float().reshape(-1, lg.size(-1)), t.reshape(-1))
-                                 for lg, t in zip(logits, idxs)])
-        sizes = torch.tensor(self.levels, device=per_level.device, dtype=per_level.dtype)
-        token_mean = (per_level * sizes).sum() / sizes.sum()
-        # coarse levels hold few positions but decide what the chunk is about: give every level
-        # equal weight in half of the loss instead of letting the 64-code levels dominate
-        loss = 0.5 * per_level.mean() + 0.5 * token_mean
-        hits = sum((lg.argmax(-1) == t).float().sum() for lg, t in zip(logits, idxs))
-        acc = hits / sizes.sum() / prefix_z.size(0)
-        return loss, acc
-
-    @torch.no_grad()
-    def generate(self, prefix_z, quant: MultiScaleRVQ, temperature=1.0, top_k=50):
-        """Coarse-to-fine: one forward pass per level. Returns final f_hat and cumulative f_hats."""
-        B = prefix_z.size(0)
-        f_hat = torch.zeros(B, quant.T, quant.dim, device=prefix_z.device)
-        level_inputs, cums = [], []
-        for k in range(len(self.levels)):
-            logits = self.forward(prefix_z, level_inputs)[k].float()
-            if temperature <= 0:
-                idx = logits.argmax(-1)
-            else:
-                logits = logits / temperature
-                if top_k:
-                    v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                    logits[logits < v[..., -1:]] = -float("inf")
-                probs = F.softmax(logits, dim=-1)
-                idx = torch.multinomial(probs.reshape(-1, probs.size(-1)), 1).view(B, -1)
-            f_hat = f_hat + quant.level_contribution(k, idx).float()
-            cums.append(f_hat)
-            if k + 1 < len(self.levels):
-                level_inputs.append(quant.down(f_hat, self.levels[k + 1]))
-        return f_hat, cums
+    def batch_info(self, prefix):
+        return prefix.size(0), prefix.device
