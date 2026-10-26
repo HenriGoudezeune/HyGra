@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HyGra</title>
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -68,7 +69,20 @@ h1 { margin: 0; font-size: 30px; letter-spacing: 1px; overflow: hidden; text-ove
 pre { margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 15px; line-height: 1.6; color: var(--text); white-space: pre-wrap; overflow-x: auto; }
 .md { font-size: 17px; line-height: 1.55; overflow-wrap: anywhere; }
 .md p { margin: 0 0 10px; } .md p:last-child { margin-bottom: 0; }
-.md h3 { margin: 14px 0 8px; color: var(--mustard); letter-spacing: 1px; font-size: 19px; }
+.md h1, .md h2, .md h3, .md h4 { margin: 14px 0 8px; color: var(--mustard); letter-spacing: 1px; font-size: 19px; }
+.md h1 { font-size: 24px; } .md h2 { font-size: 21px; } .md h4 { font-size: 17px; color: var(--text); }
+.md > :first-child { margin-top: 0; }
+.md blockquote { margin: 0 0 10px; padding: 4px 14px; border-left: 4px solid var(--mustard); color: var(--text-dim); }
+.md hr { border: 0; height: 3px; background: var(--orange); margin: 14px 0; }
+.md table { border-collapse: collapse; margin: 4px 0 12px; font-size: 15px; display: block; max-width: 100%; overflow-x: auto; }
+.md th, .md td { border: 2px solid var(--olive-soft); padding: 6px 12px; text-align: left; vertical-align: top; }
+.md th { background: var(--olive-soft); color: var(--mustard); }
+.md li > p { margin: 0; }
+.md input[type=checkbox] { margin-right: 6px; }
+.md del { color: var(--text-mute); }
+.md .math { overflow-x: auto; overflow-y: hidden; margin: 4px 0 12px; }
+.md .katex { font-size: 1.1em; color: #FFF1CC; }
+.md .katex-error { color: var(--orange) !important; font-family: 'JetBrains Mono', monospace; font-size: 14px; }
 .md ul, .md ol { margin: 0 0 10px; padding-left: 24px; }
 .md li { margin: 3px 0; }
 .md li::marker { color: var(--orange); }
@@ -398,6 +412,9 @@ body.surfing .surfer { display: block; }
   </div>
 </template>
 
+<script src="vendor/marked.min.js"></script>
+<script src="vendor/purify.min.js"></script>
+<script src="vendor/katex/katex.min.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 const COLORS = ["#FF7A1A", "#FF7A1A", "#F2C14E", "#F2C14E", "#F2C14E", "#7FE0C8", "#7FE0C8", "#7FE0C8", "#7FE0C8"];
@@ -431,49 +448,40 @@ function api() {
 function setStatus(text) { $("status-text").textContent = text; }
 function isClaude() { return $("model").value === "claude"; }
 
-/* --- kleine, veilige Markdown-weergave (alles wordt eerst ge-escaped) --- */
+/* --- Markdown (marked, GFM) + LaTeX (KaTeX), daarna door DOMPurify --- */
 function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
-function inline(s) {
-  return esc(s)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>")
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+function tex(src, display) {
+  try { return katex.renderToString(src, { displayMode: display, throwOnError: false, output: "htmlAndMathml" }); }
+  catch { return esc(src); }
 }
+marked.use({
+  gfm: true, breaks: true,
+  renderer: {
+    code({ text, lang }) {
+      const n = text.split("\n").length;
+      return '<details class="code"><summary><span>' + esc(lang || "code").toUpperCase() + "</span><small>" + n + (n === 1 ? " regel" : " regels") +
+        "</small></summary><pre><code>" + esc(text) + "</code></pre></details>";
+    },
+    html({ text }) { return esc(text); },   // ruwe HTML gewoon als tekst tonen
+  },
+  extensions: [
+    { name: "tool", level: "block", start: (s) => s.indexOf("⁣tool "),
+      tokenizer(s) { const m = /^⁣tool ([^\n]*)(?:\n|$)/.exec(s); if (m) return { type: "tool", raw: m[0], text: m[1] }; },
+      renderer(t) { const [name, ...rest] = t.text.split(" · ");
+        return '<div class="tool"><b>' + esc(name) + "</b>" + (rest.length ? "<span>" + esc(rest.join(" · ")) + "</span>" : "") + "</div>"; } },
+    { name: "mathBlock", level: "block", start: (s) => s.search(/\$\$|\\\[/),
+      tokenizer(s) { const m = /^\$\$([\s\S]+?)\$\$[^\S\n]*(?:\n|$)/.exec(s) || /^\\\[([\s\S]+?)\\\][^\S\n]*(?:\n|$)/.exec(s);
+        if (m) return { type: "mathBlock", raw: m[0], text: m[1].trim() }; },
+      renderer: (t) => '<div class="math">' + tex(t.text, true) + "</div>" },
+    { name: "mathInline", level: "inline", start: (s) => s.search(/\$|\\\(/),
+      tokenizer(s) { const m = /^\$\$([^$]+?)\$\$/.exec(s) || /^\$(?!\s)((?:\\.|[^\\$\n`])+?)(?<!\s)\$(?!\d)/.exec(s) || /^\\\(([\s\S]+?)\\\)/.exec(s);
+        if (m) return { type: "mathInline", raw: m[0], text: m[1], display: m[0].startsWith("$$") }; },
+      renderer: (t) => tex(t.text, t.display) },
+  ],
+});
+DOMPurify.addHook("afterSanitizeAttributes", (n) => { if (n.tagName === "A") { n.setAttribute("target", "_blank"); n.setAttribute("rel", "noreferrer"); } });
 function markdown(src) {
-  const out = [], lines = src.replace(/\r/g, "").split("\n");
-  let i = 0, para = [], list = null;
-  const flushPara = () => { if (para.length) { out.push("<p>" + para.map(inline).join("<br>") + "</p>"); para = []; } };
-  const flushList = () => { if (list) { out.push("<" + list.tag + ">" + list.items.map((x) => "<li>" + inline(x) + "</li>").join("") + "</" + list.tag + ">"); list = null; } };
-  while (i < lines.length) {
-    const l = lines[i];
-    if (/^```/.test(l)) {
-      flushPara(); flushList();
-      const lang = l.slice(3).trim() || "code", code = []; i++;
-      while (i < lines.length && !lines[i].startsWith("```")) code.push(lines[i++]);
-      out.push('<details class="code"><summary><span>' + esc(lang).toUpperCase() + "</span><small>" + code.length + (code.length === 1 ? " regel" : " regels") +
-        "</small></summary><pre><code>" + esc(code.join("\n")) + "</code></pre></details>"); i++; continue;
-    }
-    if (l.startsWith("\u2063tool ")) {
-      flushPara(); flushList();
-      const [name, ...rest] = l.slice(6).split(" · ");
-      out.push('<div class="tool"><b>' + esc(name) + "</b>" + (rest.length ? "<span>" + esc(rest.join(" · ")) + "</span>" : "") + "</div>");
-      i++; continue;
-    }
-    const h = l.match(/^(#{1,4})\s+(.*)/);
-    const ul = l.match(/^\s*[-*]\s+(.*)/), ol = l.match(/^\s*\d+[.)]\s+(.*)/);
-    if (h) { flushPara(); flushList(); out.push("<h3>" + inline(h[2]) + "</h3>"); }
-    else if (ul || ol) {
-      flushPara();
-      const tag = ul ? "ul" : "ol";
-      if (!list || list.tag !== tag) { flushList(); list = { tag, items: [] }; }
-      list.items.push((ul || ol)[1]);
-    } else if (!l.trim()) { flushPara(); flushList(); }
-    else { flushList(); para.push(l); }
-    i++;
-  }
-  flushPara(); flushList();
-  return out.join("");
+  return DOMPurify.sanitize(marked.parse(src.replace(/\r/g, "")), { ADD_ATTR: ["target"] });
 }
 
 /* --- geschiedenis --- */

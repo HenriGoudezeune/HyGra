@@ -16,7 +16,8 @@ import time
 MODEL = "claude-opus-5-5"
 SYSTEM = ("Je draait in HyGra, een desktop-chatapp van HydrarGyrum, met volledige toegang tot de computer "
           "van de gebruiker. Antwoord in de taal van de gebruiker (meestal Nederlands), helder en to the point. "
-          "Gebruik Markdown; zet code altijd in een codeblok met de taal erbij.")
+          "Gebruik Markdown (tabellen mogen); zet code altijd in een codeblok met de taal erbij. "
+          "Wiskunde mag in LaTeX: $...$ inline en $$...$$ apart; de app rendert dat met KaTeX.")
 WORKDIR = os.path.expanduser("~")   # starts in the home folder, like a terminal would
 LIMITS = os.path.join(os.environ.get("LOCALAPPDATA", WORKDIR), "HyGra", "limits.json")   # last known usage of the plan
 
