@@ -161,6 +161,17 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--mustard); }
   border: 4px solid var(--orange); background: var(--olive); display: grid; place-content: center; }
 .check input::after { content: ""; width: 10px; height: 10px; background: var(--orange); transform: scale(0); transition: transform .1s; }
 .check input:checked::after { transform: scale(1); }
+/* eerder: filter op bron en zoeken */
+.hist-tools { display: flex; flex-direction: column; gap: 8px; }
+.hist-src { display: flex; gap: 4px; }
+.hist-src button { flex: 1 1 0; min-height: 32px; background: transparent; border: 3px solid var(--olive-line); color: var(--text-mute);
+  font: 600 12px 'Chakra Petch', sans-serif; letter-spacing: 1px; cursor: pointer; padding: 0 4px; }
+.hist-src button.on { border-color: var(--orange); color: var(--text); background: var(--olive); }
+.hist-find { min-height: 36px; background: var(--olive); color: var(--text); border: 3px solid var(--olive-line); border-radius: 0; padding: 0 10px;
+  font: 14px 'Chakra Petch', sans-serif; }
+.hist-find:focus { outline: none; border-color: var(--orange); }
+nav .src { flex: 0 0 auto; font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--olive-deep); background: var(--c); padding: 1px 5px; }
+nav .none { font-size: 14px; color: var(--text-mute); padding: 8px 12px; }
 nav button .t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 nav button .run { flex: 0 0 auto; width: 10px; height: 10px; background: var(--orange); animation: blink .8s infinite steps(2); }
 /* gesprekken verwijderen: kruisje bij hoveren, tweede klik bevestigt */
@@ -257,6 +268,12 @@ body.surfing .surfer { display: block; }
     </div>
     <div style="display:flex;flex-direction:column;gap:6px;min-height:0">
       <span class="label">EERDER</span>
+      <div class="hist-tools">
+        <div class="hist-src" id="hist-src" role="group" aria-label="Toon gesprekken van">
+          <button type="button" data-src="all">ALLES</button><button type="button" data-src="hygra">HYGRA</button><button type="button" data-src="code">CODE</button><button type="button" data-src="cowork">COWORK</button>
+        </div>
+        <input class="hist-find" id="hist-find" type="search" placeholder="Zoek in titels…" aria-label="Zoek gesprekken">
+      </div>
       <nav aria-label="Gesprekken" id="history"></nav>
     </div>
     <div class="settings">
@@ -387,6 +404,11 @@ const COLORS = ["#FF7A1A", "#FF7A1A", "#F2C14E", "#F2C14E", "#F2C14E", "#7FE0C8"
 const NAMES = ["1 code", "2", "4", "8", "16", "32", "48", "64", "64 codes"];
 const MODEL_LABEL = { claude: "CLAUDE OPUS 5.5", qwen: "QWEN-NCM", ncm: "NCM 34M" };
 let chats = loadChats(), current = null, deviceName = "", hasClaude = true;
+// eerdere gesprekken uit Claude Code (terminal + Desktop) en Cowork, gelezen van deze laptop
+let external = null, histSrc = "all";
+const opened = new Map();   // sessie-id → geopend extern gesprek (blijft in het geheugen)
+const SRC = { hygra: ["HYGRA", "#FF7A1A"], code: ["CODE", "#7FE0C8"], cowork: ["COWORK", "#F2C14E"] };
+try { histSrc = localStorage.getItem("hygra-hist") || "all"; } catch {}
 // running work per lane: Claude (cloud) and the GPU (one local model at a time) run side by side
 const lanes = { claude: null, gpu: null };
 const failed = new Set();
@@ -455,29 +477,79 @@ function markdown(src) {
 }
 
 /* --- geschiedenis --- */
+function historyEntries() {
+  const ext = new Map((external || []).map((x) => [x.id, x]));
+  const own = chats.map((c) => ({ src: "hygra", chat: c, title: c.title,
+    when: c.updated || (ext.has(c.claudeSession) ? ext.get(c.claudeSession).updated * 1000 : 0) }));
+  const mine = new Set(chats.map((c) => c.claudeSession));
+  const rest = (external || []).filter((x) => !mine.has(x.id))
+    .map((x) => ({ src: x.source, ext: x, chat: opened.get(x.id), title: x.title, when: x.updated * 1000 }));
+  const q = $("hist-find").value.trim().toLowerCase();
+  return own.concat(rest)
+    .filter((e) => (histSrc === "all" || e.src === histSrc) && (!q || e.title.toLowerCase().includes(q)))
+    .sort((x, y) => y.when - x.when);
+}
+
 function renderHistory() {
   const box = $("history"); box.replaceChildren();
-  chats.forEach((c) => {
+  $("hist-src").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.src === histSrc));
+  const list = historyEntries();
+  list.forEach((e) => {
+    const c = e.chat, on = !!c && c === current;
     const item = document.createElement("div"); item.className = "item";
     const b = document.createElement("button");
-    b.className = c === current ? "on" : "";
-    b.innerHTML = '<svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true" style="flex:0 0 auto"><path d="M1 12 L6 3 L10 10 L17 1" stroke="' + (c === current ? "#FF7A1A" : "#BFB27E") + '" stroke-width="3" fill="none"/></svg>';
-    const t = document.createElement("span"); t.className = "t"; t.textContent = c.title; b.append(t);
-    if (c.turns.some((x) => x.pending)) { const r = document.createElement("span"); r.className = "run"; r.title = "bezig"; b.append(r); }
-    b.onclick = () => { current = c; renderAll(); };
-    const del = document.createElement("button"); del.className = "del"; del.type = "button";
-    del.setAttribute("aria-label", "Verwijder gesprek " + c.title);
-    del.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2 L12 12 M12 2 L2 12" stroke="#FF7A1A" stroke-width="3"/></svg>';
-    del.onclick = () => {
-      if (!del.classList.contains("arm")) {   // eerste klik: vragen, tweede klik: weg
-        del.classList.add("arm"); del.append("WEG?");
-        setTimeout(() => { if (del.isConnected) renderHistory(); }, 3000);
-        return;
-      }
-      deleteChat(c);
-    };
-    item.append(b, del); box.append(item);
+    b.className = on ? "on" : "";
+    if (e.ext) b.title = e.ext.title + "\n" + (e.ext.cwd || "") + " · " + e.ext.prompts + (e.ext.prompts === 1 ? " vraag" : " vragen");
+    b.innerHTML = '<svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true" style="flex:0 0 auto"><path d="M1 12 L6 3 L10 10 L17 1" stroke="' + (on ? "#FF7A1A" : "#BFB27E") + '" stroke-width="3" fill="none"/></svg>';
+    const t = document.createElement("span"); t.className = "t"; t.textContent = e.title; b.append(t);
+    if (c && c.turns.some((x) => x.pending)) { const r = document.createElement("span"); r.className = "run"; r.title = "bezig"; b.append(r); }
+    if (e.ext) { const s = document.createElement("span"); s.className = "src"; s.textContent = SRC[e.src][0]; s.style.setProperty("--c", SRC[e.src][1]); b.append(s); }
+    b.onclick = () => { if (e.ext) openExternal(e.ext); else { current = c; renderAll(); } };
+    item.append(b);
+    if (!e.ext) {   // alleen HyGra-gesprekken kan je hier wissen; Code en Cowork blijven van Claude
+      const del = document.createElement("button"); del.className = "del"; del.type = "button";
+      del.setAttribute("aria-label", "Verwijder gesprek " + c.title);
+      del.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2 L12 12 M12 2 L2 12" stroke="#FF7A1A" stroke-width="3"/></svg>';
+      del.onclick = () => {
+        if (!del.classList.contains("arm")) {   // eerste klik: vragen, tweede klik: weg
+          del.classList.add("arm"); del.append("WEG?");
+          setTimeout(() => { if (del.isConnected) renderHistory(); }, 3000);
+          return;
+        }
+        deleteChat(c);
+      };
+      item.append(del);
+    }
+    box.append(item);
   });
+  if (!list.length) {
+    const p = document.createElement("div"); p.className = "none";
+    p.textContent = external === null && histSrc !== "hygra" ? "Eerdere gesprekken laden…" : "Geen gesprekken.";
+    box.append(p);
+  }
+}
+
+async function loadExternal() {
+  try { external = await api().history(); } catch { external = external || []; }
+  renderHistory();
+}
+
+// een Code- of Cowork-gesprek openen; Code-gesprekken kan je hier gewoon verderzetten
+async function openExternal(x) {
+  let c = opened.get(x.id);
+  if (!c) {
+    c = { title: x.title, turns: [], source: x.source, cwd: x.cwd, ext: true, loading: true };
+    if (x.source === "code") c.claudeSession = x.id;
+    opened.set(x.id, c);
+  }
+  current = c; renderAll();
+  if (!c.loading) return;
+  let r;
+  try { r = await api().open_history(x.path); } catch (err) { r = { error: String(err) }; }
+  c.loading = false;
+  c.turns = r.error ? [{ prompt: "(transcript)", model: "claude", error: r.error, imported: true }]
+    : r.turns.map((t) => ({ ...t, imported: true })).concat(c.turns);
+  if (current === c) renderAll();
 }
 
 function deleteChat(c) {
@@ -518,9 +590,10 @@ async function refreshUsage() {
 function renderAll() {
   $("title").textContent = current ? current.title : "Nieuw gesprek";
   $("log").replaceChildren();
-  if (!current || !current.turns.length) renderEmpty();
+  if (current && current.loading) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "Gesprek laden…"; $("log").append(p); }
+  else if (!current || !current.turns.length) renderEmpty();
   else current.turns.forEach((t) => { addMe(t.prompt); if (t.pending) $("log").append(t.pending.node); else addBot(t); });
-  syncLoadCard(); scrollDown();
+  syncLoadCard(); scrollDown(); applyModel();
   renderHistory();
 }
 
@@ -564,7 +637,8 @@ function fillBot(n, t) {
     : MODEL_LABEL[t.model] + " · " + (t.chunks || 0) + " CHUNK" + (t.chunks === 1 ? "" : "S") + " · 9 STAPPEN ELK";
   n.querySelector(".copy").onclick = () => navigator.clipboard && navigator.clipboard.writeText(t.model === "claude" ? (t.text || "") : t.prompt + (t.completion || ""));
   const foot = n.querySelector(".foot");
-  foot.textContent = t.model === "claude" && !t.error
+  foot.textContent = t.imported ? "uit " + (current && current.source === "cowork" ? "Cowork" : "Claude Code")
+    : t.model === "claude" && !t.error
     ? (t.tokens_in || 0).toLocaleString("nl-BE") + " → " + (t.tokens_out || 0).toLocaleString("nl-BE") + " tokens · via Pro, geen extra kost · " + (t.seconds || 0).toFixed(1).replace(".", ",") + " s"
     : "";
   const lv = n.querySelector(".levels"), view = n.querySelector(".level-view");
@@ -694,7 +768,9 @@ async function send(e) {
   const prompt = $("prompt").value, model = $("model").value, lane = laneOf(model);
   if (!prompt.trim() || lanes[lane]) return;
   if (model === "claude" && !hasClaude) return showNoClaude();
+  if (current && (current.loading || (current.ext && (current.source !== "code" || model !== "claude")))) current = null;   // Cowork kan je alleen lezen
   if (!current) { current = { title: titleOf(prompt), turns: [] }; chats.unshift(current); }
+  current.updated = Date.now();
   const chat = current, turn = { prompt, model }, t0 = Date.now();
   const job = { kind: model === "claude" ? "claude" : "write", model, chat, turn };
   if (model === "claude") {
@@ -716,7 +792,7 @@ async function send(e) {
       // één Claude Code-sessie per HyGra-gesprek; die onthoudt het gesprek zelf
       const first = !chat.claudeSession;
       if (first) chat.claudeSession = newSessionId();
-      r = await api().claude(chat.claudeSession, first, prompt, job.id);
+      r = await api().claude(chat.claudeSession, first, prompt, job.id, chat.cwd || null);
       if (r.error && first) delete chat.claudeSession;   // de sessie is nooit gestart
     } else {
       r = await api().complete(prompt, model, +$("temp").value, +$("chunks").value);
@@ -734,12 +810,16 @@ async function send(e) {
     scrollDown(false);
   }
   if (chats.includes(chat)) { save(); renderHistory(); }
+  if (model === "claude") loadExternal();   // een verdergezet Code-gesprek schuift naar boven
   if (lane === "gpu") warm();
 }
 
 function applyModel() {
   $("local-opts").classList.toggle("hidden", isClaude());
-  $("prompt").placeholder = isClaude()
+  const ext = current && current.ext;
+  $("prompt").placeholder = ext && current.source === "cowork" ? "Cowork-gesprek: alleen lezen. Een bericht start een nieuw gesprek."
+    : ext && isClaude() ? "Zet dit Claude Code-gesprek verder…  (Enter = versturen, Shift+Enter = nieuwe regel)"
+    : isClaude()
     ? "Vraag Claude iets…  (Enter = versturen, Shift+Enter = nieuwe regel)"
     : "Typ het begin van een functie…  (Enter = versturen, Shift+Enter = nieuwe regel)";
 }
@@ -768,6 +848,7 @@ window.addEventListener("pywebviewready", async () => {
   renderUsage(await api().limits(false));
   [...$("model").options].forEach((o) => { if (o.value !== "claude" && !info.models.includes(o.value)) o.remove(); });
   onModelChange();
+  loadExternal();
 });
 $("model").onchange = onModelChange;
 $("usage-refresh").onclick = refreshUsage;
@@ -777,6 +858,12 @@ $("form").onsubmit = send;
 $("prompt").addEventListener("keydown", (e) => {   // Enter = versturen, Shift+Enter = nieuwe regel
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) send(e);
 });
+$("hist-src").onclick = (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  histSrc = b.dataset.src; try { localStorage.setItem("hygra-hist", histSrc); } catch {}
+  renderHistory();
+};
+$("hist-find").oninput = renderHistory;
 $("new").onclick = () => { current = null; renderAll(); $("prompt").focus(); };
 $("temp").oninput = () => $("tval").textContent = (+$("temp").value).toFixed(1);
 $("chunks").oninput = () => $("cval").textContent = $("chunks").value;

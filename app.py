@@ -23,7 +23,7 @@ import torch  # noqa: E402
 import webview  # noqa: E402
 
 from eval_code import cut_function, load, load_decoder, next_chunk  # noqa: E402
-from ncm import claude_chat  # noqa: E402
+from ncm import claude_chat, history  # noqa: E402
 from ncm.data import get_encoder  # noqa: E402
 
 MODELS = {"qwen": "ckpt/generator_qwen.pt", "ncm": "ckpt/generator.pt"}
@@ -61,7 +61,17 @@ class Api:
         claude_chat.forget(session_id)
         return True
 
-    def claude(self, session_id, first, prompt, msg_id):
+    # ----- earlier conversations from Claude Code and Cowork (read from this computer)
+    def history(self):
+        return history.sessions()
+
+    def open_history(self, path):
+        try:
+            return {"turns": history.load(path)}
+        except (OSError, ValueError) as e:
+            return {"error": str(e)}
+
+    def claude(self, session_id, first, prompt, msg_id, cwd=None):
         """Streams the reply into the page (hygra.delta / hygra.status) and returns the final turn."""
         buf, last = [], [time.time()]
 
@@ -80,7 +90,7 @@ class Api:
             if self._window:
                 self._window.evaluate_js(f"hygra.status({json.dumps(msg_id)}, {json.dumps(s)})")
 
-        res = claude_chat.reply(session_id, bool(first), prompt, on_text, on_status)
+        res = claude_chat.reply(session_id, bool(first), prompt, on_text, on_status, cwd=cwd)
         flush()
         return res
 
