@@ -170,6 +170,17 @@ nav .del.arm svg { display: none; }
 .ubar .track { height: 12px; background: var(--olive-line); clip-path: polygon(0 0, 100% 0, calc(100% - 7px) 100%, 0 100%); }
 .ubar .track i { display: block; height: 100%; width: 0; background: var(--c, var(--mint)); transition: width .4s; }
 .ubar small, .usage .at { font-size: 12px; color: var(--text-mute); letter-spacing: .5px; }
+/* funky-modus: randen wisselen van kleur en Claude surft over het scherm zolang er iets bezig is */
+@property --orange { syntax: '<color>'; inherits: true; initial-value: #FF7A1A; }
+:root { transition: --orange 1.2s ease; }
+.surfer { position: fixed; left: 0; bottom: 120px; z-index: 50; pointer-events: none; display: none;
+  animation: surf-x 7s linear infinite; }
+.surfer > div { animation: surf-y 1.75s ease-in-out infinite alternate; }
+.surfer svg { display: block; animation: surf-tilt 1.75s ease-in-out infinite alternate; }
+body.surfing .surfer { display: block; }
+@keyframes surf-x { from { transform: translateX(-140px); } to { transform: translateX(calc(100vw + 40px)); } }
+@keyframes surf-y { from { transform: translateY(0); } to { transform: translateY(-46vh); } }
+@keyframes surf-tilt { from { transform: rotate(8deg); } to { transform: rotate(-12deg); } }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 :focus-visible { outline: 3px solid var(--mint); outline-offset: 2px; }
 @media (max-width: 860px) {
@@ -224,6 +235,11 @@ nav .del.arm svg { display: none; }
           <option value="ncm">NCM 34M · lokaal</option>
         </select>
       </label>
+      <label class="check">
+        <input type="checkbox" id="funky">
+        <svg width="22" height="18" viewBox="0 0 22 18" aria-hidden="true"><path d="M1 12 L5 6 L9 12 L13 6 L17 12 L21 6" stroke="#FF5FA2" stroke-width="3" fill="none"/><path d="M3 16 L19 16" stroke="#7FE0C8" stroke-width="3"/></svg>
+        Funky-modus
+      </label>
       <div id="local-opts" style="display:flex;flex-direction:column;gap:18px">
         <label>
           <span style="display:flex;align-items:center;gap:8px">
@@ -267,6 +283,16 @@ nav .del.arm svg { display: none; }
     </form>
   </main>
 </div>
+
+<div class="surfer" aria-hidden="true"><div>
+  <svg width="110" height="96" viewBox="0 0 110 96">
+    <path d="M55 4 L59 24 L77 29 L59 34 L55 54 L51 34 L33 29 L51 24 Z" fill="#7FE0C8"/>
+    <path d="M41 15 L51 25 M69 15 L59 25 M41 43 L51 33 M69 43 L59 33" stroke="#7FE0C8" stroke-width="4"/>
+    <path d="M8 66 L96 60 L106 66 L92 74 L14 76 Z" fill="#F2C14E"/>
+    <path d="M20 70 L94 66" stroke="#FF7A1A" stroke-width="4"/>
+    <path d="M2 84 L10 76 L14 86 Z M0 94 L8 86 L12 94 Z M14 92 L20 84 L24 92 Z" fill="#7FE0C8" opacity=".8"/>
+  </svg>
+</div></div>
 
 <template id="t-me">
   <div class="msg me">
@@ -556,7 +582,23 @@ function syncLoadCard() {
   else if (!j.node.isConnected) { $("log").append(j.node); scrollDown(); }
 }
 
+// funky-modus: zolang er iets bezig is, schuift de randkleur om de paar seconden door
+const FUNKY = ["#FF5FA2", "#7FE0C8", "#F2C14E", "#9B7BFF", "#4FD1FF", "#FF7A1A"];
+let funkyTimer = null, funkyStep = 0;
+function syncFunky() {
+  const on = $("funky").checked && !!(lanes.claude || lanes.gpu);
+  document.body.classList.toggle("surfing", on && !!lanes.claude);
+  if (on && !funkyTimer) {
+    const step = () => document.documentElement.style.setProperty("--orange", FUNKY[funkyStep++ % FUNKY.length]);
+    step(); funkyTimer = setInterval(step, 2500);
+  } else if (!on && funkyTimer) {
+    clearInterval(funkyTimer); funkyTimer = null;
+    document.documentElement.style.removeProperty("--orange");
+  }
+}
+
 function refreshUi() {
+  syncFunky();
   const lane = laneOf($("model").value), job = lanes[lane], other = lanes[lane === "claude" ? "gpu" : "claude"];
   $("send").disabled = !!job;
   $("send").querySelector(".i-send").style.display = job ? "none" : "";
@@ -679,6 +721,8 @@ window.addEventListener("pywebviewready", async () => {
 });
 $("model").onchange = onModelChange;
 $("usage-refresh").onclick = refreshUsage;
+try { $("funky").checked = localStorage.getItem("hygra-funky") === "1"; } catch {}
+$("funky").onchange = () => { try { localStorage.setItem("hygra-funky", $("funky").checked ? "1" : "0"); } catch {} syncFunky(); };
 $("form").onsubmit = send;
 $("prompt").addEventListener("keydown", (e) => {   // Enter = versturen, Shift+Enter = nieuwe regel
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) send(e);
