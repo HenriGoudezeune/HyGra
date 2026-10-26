@@ -165,4 +165,6 @@ if __name__ == "__main__":
                                        width=1280, height=860, min_size=(420, 600), background_color="#3B461C")
     if sys.platform == "win32":
         api._window.events.shown += lambda: set_icon(api._window)
-    webview.start()
+    # not private: localStorage (funky mode, filters, ...) must survive a restart
+    webview.start(private_mode=False,
+                  storage_path=os.path.join(os.environ.get("LOCALAPPDATA", ROOT), "HyGra", "webview"))
