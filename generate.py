@@ -4,7 +4,7 @@ import time
 
 import torch
 
-from eval_code import load, next_chunk
+from eval_code import load, load_decoder, next_chunk
 from ncm.data import get_encoder
 
 p = argparse.ArgumentParser()
@@ -17,6 +17,7 @@ p.add_argument("--show-levels", action="store_true", help="print the text decode
 p.add_argument("--tokenizer", default="ckpt/tokenizer.pt")
 p.add_argument("--generator", default="ckpt/generator.pt")
 p.add_argument("--data", default="data", help="directory holding bpe.json")
+p.add_argument("--decoder", default="ckpt/decoder_ctx.pt", help="context decoder (used if present)")
 p.add_argument("--seed", type=int)
 args = p.parse_args()
 
@@ -24,6 +25,7 @@ if args.seed is not None:
     torch.manual_seed(args.seed)
 dev = "cuda" if torch.cuda.is_available() else "cpu"
 vq, gen = load(args, dev)
+decoder = load_decoder(args.decoder, vq, dev)
 vcfg = vq.cfg
 
 enc = get_encoder(args.data)
@@ -35,7 +37,7 @@ out = []
 t0 = time.time()
 with torch.no_grad():
     for c in range(args.chunks):
-        new, cums = next_chunk(vq, gen, enc, context + out, args.temperature, args.top_k, dev)
+        new, cums = next_chunk(vq, gen, enc, context + out, args.temperature, args.top_k, dev, decoder)
         if args.show_levels:
             for k, cum in enumerate(cums):
                 text = enc.decode(vq.decode(cum).argmax(-1)[0].tolist())

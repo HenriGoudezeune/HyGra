@@ -5,6 +5,7 @@ completion is cut where the function ends, then checked with ast.parse and with 
 run in a subprocess with a timeout.
 """
 import argparse
+import os
 import ast
 import subprocess
 import sys
@@ -69,7 +70,17 @@ def load(args, dev):
     return vq, gen
 
 
-def next_chunk(vq, gen, enc, context, temperature, top_k, dev):
+def load_decoder(path, vq, dev):
+    """Context-reading decoder (train_decoder.py), or None to use the stage-1 decoder."""
+    if not path or not os.path.exists(path):
+        return None
+    from ncm.context_decoder import ContextDecoder
+    dec = ContextDecoder(vq).to(dev).eval()
+    dec.load_state_dict(torch.load(path, map_location=dev)["model"])
+    return dec
+
+
+def next_chunk(vq, gen, enc, context, temperature, top_k, dev, decoder=None):
     """Stage-1 BPE ids of the context -> ids of the next chunk."""
     if hasattr(gen, "encode_prefix"):   # Qwen backbone reads the text itself
         prefix = gen.encode_prefix([enc.decode(context)], dev)
@@ -80,15 +91,20 @@ def next_chunk(vq, gen, enc, context, temperature, top_k, dev):
         prefix = vq.encode_chunks(torch.tensor([window], device=dev))
     with torch.autocast("cuda", dtype=torch.bfloat16, enabled=dev == "cuda"):
         f_hat, cums = gen.generate(prefix, vq.quant, temperature, top_k)
-    return vq.decode(f_hat).argmax(-1)[0].tolist(), cums
+        if decoder is None:
+            return vq.decode(f_hat).argmax(-1)[0].tolist(), cums
+        L = vq.cfg.context_length
+        ctx = context[-L:]
+        ctx = torch.tensor([[enc.eot_token] * (L - len(ctx)) + ctx], device=dev)
+        return decoder(f_hat, ctx).argmax(-1)[0].tolist(), cums
 
 
 @torch.no_grad()
-def complete(vq, gen, enc, prompt, chunks, temperature, top_k, dev):
+def complete(vq, gen, enc, prompt, chunks, temperature, top_k, dev, decoder=None):
     eot = enc.eot_token
     context, out = enc.encode_ordinary(prompt), []
     for _ in range(chunks):
-        new, _ = next_chunk(vq, gen, enc, context + out, temperature, top_k, dev)
+        new, _ = next_chunk(vq, gen, enc, context + out, temperature, top_k, dev, decoder)
         if eot in new:
             return enc.decode(out + new[:new.index(eot)])
         out += new
@@ -108,6 +124,7 @@ def main():
     p.add_argument("--tokenizer", default="ckpt/tokenizer.pt")
     p.add_argument("--generator", default="ckpt/generator.pt")
     p.add_argument("--data", default="data")
+    p.add_argument("--decoder", default="ckpt/decoder_ctx.pt", help="context decoder (used if present)")
     p.add_argument("--samples", type=int, default=5, help="samples per task (pass@k uses all)")
     p.add_argument("--chunks", type=int, default=2)
     p.add_argument("--temperature", type=float, default=0.6)
@@ -118,6 +135,8 @@ def main():
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     torch.manual_seed(0)
     vq, gen = load(args, dev)
+    decoder = load_decoder(args.decoder, vq, dev)
+    print(f"decoder: {'context' if decoder else 'stage-1'}")
     enc = get_encoder(args.data)
 
     n = valid = 0
@@ -127,7 +146,7 @@ def main():
         task_solved = False
         for _ in range(args.samples):
             code = cut_function(prompt, complete(vq, gen, enc, prompt, args.chunks,
-                                                 args.temperature, args.top_k, dev))
+                                                 args.temperature, args.top_k, dev, decoder))
             n += 1
             try:
                 ast.parse(code)
