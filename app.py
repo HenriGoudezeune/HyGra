@@ -54,6 +54,13 @@ class Api:
     def has_claude(self):
         return claude_chat.available()
 
+    def limits(self, refresh=False):
+        return claude_chat.refresh_limits() if refresh else claude_chat.last_limits()
+
+    def forget(self, session_id):
+        claude_chat.forget(session_id)
+        return True
+
     def claude(self, session_id, first, prompt, msg_id):
         """Streams the reply into the page (hygra.delta / hygra.status) and returns the final turn."""
         buf, last = [], [time.time()]
