@@ -166,6 +166,20 @@ select { -webkit-appearance: none; appearance: none; cursor: pointer; padding: 0
   background-repeat: no-repeat; background-position: right 12px center; }
 select:hover { border-color: var(--mustard); }
 select option { background: var(--olive-deep); color: var(--text); }
+/* eigen keuzemenu: de open lijst van een native <select> tekent Windows zelf, wit en rond */
+.pick { position: relative; }
+.pick-btn { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 44px; padding: 0 12px;
+  background: var(--olive); color: var(--text); border: 4px solid var(--orange); font-size: 15px; font-weight: 600; text-align: left; cursor: pointer; }
+.pick-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-btn svg { flex: 0 0 auto; transition: transform .15s; }
+.pick-btn:hover, .pick-btn:focus-visible, .pick.open .pick-btn { border-color: var(--mustard); outline: none; }
+.pick.open .pick-btn svg { transform: rotate(180deg); }
+.pick-list { position: fixed; z-index: 50; display: flex; flex-direction: column; gap: 4px; padding: 6px;
+  background: var(--olive-deep); border: 4px solid var(--orange); box-shadow: 6px 6px 0 rgba(0,0,0,.35); }
+.pick-list button { display: flex; align-items: center; min-height: 44px; padding: 0 12px; text-align: left; background: transparent; border: 0;
+  border-left: var(--line) solid transparent; color: var(--text-dim); font-size: 15px; font-weight: 600; cursor: pointer; }
+.pick-list button:hover, .pick-list button:focus-visible { background: var(--olive); color: var(--text); outline: none; }
+.pick-list button.on { border-left-color: var(--orange); color: var(--text); }
 input[type=range] { -webkit-appearance: none; appearance: none; height: 28px; background: transparent; cursor: pointer; margin: 0; }
 input[type=range]::-webkit-slider-runnable-track { height: 6px; background: var(--olive-line); }
 input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 24px; margin-top: -9px; background: var(--orange);
@@ -229,7 +243,7 @@ body.funky .settings { border-top-color: var(--f5); }
 body.funky aside .cut-sm { background: var(--f3) !important; }
 body.funky .new { background: var(--f4); }
 body.funky .brand b i { color: var(--f2); }
-body.funky select { border-color: var(--f1); }
+body.funky select, body.funky .pick-btn, body.funky .pick-list { border-color: var(--f1); }
 body.funky .field { background: var(--f5); }
 body.funky .send { background: var(--f2); }
 body.funky .bubble-me { background: var(--f3); }
@@ -303,11 +317,16 @@ body.surfing .surfer { display: block; }
         <small class="at" id="usage-at">Nog niet bekend: stuur Claude iets of vernieuw.</small>
       </div>
       <label>MODEL
-        <select id="model">
+        <select id="model" class="hidden">
           <option value="claude">Claude Opus 5.5 · Pro</option>
           <option value="qwen">Qwen-NCM · lokaal</option>
           <option value="ncm">NCM 34M · lokaal</option>
         </select>
+        <div class="pick">
+          <button type="button" class="pick-btn" aria-haspopup="listbox" aria-expanded="false"><span></span>
+            <svg width="16" height="10" viewBox="0 0 16 10" aria-hidden="true"><path d="M1 1 L8 8 L15 1" stroke="#FF7A1A" stroke-width="3" fill="none"/></svg></button>
+          <div class="pick-list hidden" role="listbox"></div>
+        </div>
       </label>
       <label class="check">
         <input type="checkbox" id="funky">
@@ -848,6 +867,43 @@ function onModelChange() {
   syncLoadCard(); refreshUi(); warm();
 }
 
+// eigen keuzemenu boven een verborgen <select>, die de bron van waarheid blijft (.value, .options, change)
+function initPick(sel) {
+  const pick = sel.nextElementSibling, btn = pick.querySelector(".pick-btn"), list = pick.querySelector(".pick-list");
+  const label = () => { btn.firstElementChild.textContent = sel.selectedOptions[0]?.textContent || ""; };
+  const isOpen = () => !list.classList.contains("hidden");
+  const close = () => { list.classList.add("hidden"); pick.classList.remove("open"); btn.setAttribute("aria-expanded", "false"); };
+  const choose = (v) => {
+    close(); btn.focus();
+    if (sel.value !== v) { sel.value = v; label(); sel.dispatchEvent(new Event("change")); }
+  };
+  const open = () => {
+    list.replaceChildren(...[...sel.options].map((o) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.setAttribute("role", "option"); b.textContent = o.textContent;
+      b.classList.toggle("on", o.value === sel.value); b.onclick = () => choose(o.value);
+      return b;
+    }));
+    list.classList.remove("hidden"); pick.classList.add("open"); btn.setAttribute("aria-expanded", "true");
+    const r = btn.getBoundingClientRect(), h = list.offsetHeight;   // fixed: de zijbalk scrolt en zou de lijst afknippen
+    list.style.left = r.left + "px"; list.style.width = r.width + "px";
+    list.style.top = (r.bottom + 6 + h <= innerHeight ? r.bottom + 6 : Math.max(6, r.top - 6 - h)) + "px";
+    (list.querySelector(".on") || list.firstElementChild)?.focus();
+  };
+  btn.onclick = () => (isOpen() ? close() : open());
+  btn.onkeydown = (e) => { if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !isOpen()) { e.preventDefault(); open(); } };
+  list.onkeydown = (e) => {
+    const items = [...list.children], i = items.indexOf(document.activeElement);
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); items[(i + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length].focus(); }
+    else if (e.key === "Escape" || e.key === "Tab") { close(); if (e.key === "Escape") btn.focus(); }
+  };
+  document.addEventListener("mousedown", (e) => { if (isOpen() && !pick.contains(e.target)) close(); });
+  document.addEventListener("scroll", (e) => { if (isOpen() && e.target.contains?.(pick)) close(); }, true);   // enkel als de knop zelf verschuift
+  window.addEventListener("resize", close);
+  new MutationObserver(label).observe(sel, { childList: true });   // opties verdwijnen als een model ontbreekt
+  label();
+}
+
 window.addEventListener("pywebviewready", async () => {
   const info = await api().info();
   deviceName = info.device.replace("NVIDIA GeForce ", "").replace(" Laptop GPU", "").toUpperCase();
@@ -858,6 +914,7 @@ window.addEventListener("pywebviewready", async () => {
   loadExternal();
 });
 $("model").onchange = onModelChange;
+initPick($("model"));
 $("usage-refresh").onclick = refreshUsage;
 try { $("funky").checked = localStorage.getItem("hygra-funky") === "1"; } catch {}
 $("funky").onchange = () => { try { localStorage.setItem("hygra-funky", $("funky").checked ? "1" : "0"); } catch {} syncFunky(); };
