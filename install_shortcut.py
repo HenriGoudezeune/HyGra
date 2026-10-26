@@ -2,6 +2,9 @@
 import os
 import subprocess
 
+from win32com.propsys import propsys, pscon
+from win32com.shell import shellcon
+
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -48,4 +51,8 @@ for folder in (programs, desktop):
           f"$s.TargetPath='{pythonw}';$s.Arguments='\"{os.path.join(ROOT, 'app.py')}\"';"
           f"$s.WorkingDirectory='{ROOT}';$s.IconLocation='{ICON}';$s.Description='HyGra (HydrarGyrum)';$s.Save()")
     subprocess.run(["powershell", "-NoProfile", "-Command", ps], check=True)
+    # same app ID as the running window (app.py), so a pinned shortcut and the window share one taskbar button
+    store = propsys.SHGetPropertyStoreFromParsingName(lnk, None, shellcon.GPS_READWRITE, propsys.IID_IPropertyStore)
+    store.SetValue(pscon.PKEY_AppUserModel_ID, propsys.PROPVARIANTType("hydrargyrum.hygra"))
+    store.Commit()
     print("shortcut:", lnk)

@@ -66,7 +66,7 @@ uv run python install_shortcut.py   # icon + Start-menu / desktop shortcut "HyGr
 uv run python app.py                # or start it from the Start menu
 ```
 
-- **Claude:** runs through the [Claude Code](https://claude.com/claude-code) CLI, logged in with your Claude Pro/Max subscription (run `claude` once in a terminal to log in). No API key and no extra cost: chats count toward your plan's normal usage limits. Each HyGra chat is one Claude Code session with all tools switched off, so Claude remembers the conversation but cannot touch your files. An `ANTHROPIC_API_KEY` in the environment is deliberately ignored, so it never falls back to paid API billing.
+- **Claude:** runs through the [Claude Code](https://claude.com/claude-code) CLI, logged in with your Claude Pro/Max subscription (run `claude` once in a terminal to log in). No API key and no extra cost: chats count toward your plan's normal usage limits. Each HyGra chat is one Claude Code session with **full access**, as in a terminal: all tools, your own settings, CLAUDE.md and MCP servers, and no permission prompts (`--dangerously-skip-permissions`). Claude can read, change and run anything on your computer, so only use it on your own machine. Tool calls show up as small lines in the chat, and code blocks start collapsed. An `ANTHROPIC_API_KEY` in the environment is deliberately ignored, so it never falls back to paid API billing.
 - **Switching models:** Claude and the local GPU models run side by side; you can switch model or chat while an answer is still coming in.
 - **Local models:** need the checkpoints in `ckpt/` (see below).
 

@@ -124,10 +124,25 @@ class Api:
             return {"error": str(e)}
 
 
+def set_icon():
+    """Gives the window (and so the taskbar button) the HyGra icon instead of Python's."""
+    user32 = ctypes.windll.user32
+    user32.LoadImageW.restype = ctypes.c_void_p
+    user32.SendMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_void_p, ctypes.c_void_p]
+    hwnd = user32.FindWindowW(None, "HyGra")
+    ico = os.path.join(ROOT, "web", "icon.ico")
+    for which, size in ((1, 256), (0, 32)):   # ICON_BIG for the taskbar / Alt+Tab, ICON_SMALL for the title bar
+        h = user32.LoadImageW(None, ico, 1, size, size, 0x10)   # IMAGE_ICON, LR_LOADFROMFILE
+        if hwnd and h:
+            user32.SendMessageW(hwnd, 0x80, which, h)   # WM_SETICON
+
+
 if __name__ == "__main__":
     if sys.platform == "win32":   # own taskbar group + icon instead of Python's
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("hydrargyrum.hygra")
     api = Api()
     api._window = webview.create_window("HyGra", os.path.join(ROOT, "web", "index.html"), js_api=api,
                                        width=1280, height=860, min_size=(420, 600), background_color="#3B461C")
+    if sys.platform == "win32":
+        api._window.events.shown += set_icon
     webview.start()

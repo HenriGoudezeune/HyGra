@@ -75,6 +75,20 @@ pre { margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 15px; line
 .md code { font-family: 'JetBrains Mono', monospace; font-size: 14px; background: var(--olive-soft); padding: 1px 6px; color: var(--mustard); }
 .md pre { background: #252D10; border-left: 5px solid var(--orange); padding: 12px 14px; margin: 6px 0 12px; font-size: 14px; }
 .md pre code { background: none; padding: 0; color: var(--text); }
+.md details.code { margin: 6px 0 12px; background: #252D10; border-left: 5px solid var(--orange); }
+.md details.code summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 9px 14px; min-height: 40px;
+  font-family: 'JetBrains Mono', monospace; font-size: 13px; letter-spacing: 1px; color: var(--mustard); font-weight: 600; }
+.md details.code summary::-webkit-details-marker { display: none; }
+.md details.code summary::before { content: ""; width: 0; height: 0; border-left: 8px solid var(--orange); border-top: 6px solid transparent; border-bottom: 6px solid transparent; transition: transform .15s; }
+.md details.code[open] summary::before { transform: rotate(90deg); }
+.md details.code summary small { color: var(--text-mute); font-weight: 400; letter-spacing: 0; }
+.md details.code summary:hover span { color: var(--text); }
+.md details.code pre { margin: 0; border-left: 0; padding-top: 0; }
+.md .tool { display: flex; gap: 10px; align-items: baseline; margin: 4px 0 10px; padding: 6px 12px; background: var(--olive); border-left: 4px solid var(--mint);
+  font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text-dim); overflow: hidden; }
+.md .tool b { color: var(--mint); flex: 0 0 auto; }
+.md .tool span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+body.funky .md details.code { border-left-color: var(--f2); }
 .md strong { color: #FFF1CC; }
 .md a { color: var(--mint); }
 .caret { display: inline-block; width: 10px; height: 18px; background: var(--mint); vertical-align: -3px; animation: blink .8s infinite steps(2); }
@@ -413,9 +427,16 @@ function markdown(src) {
     const l = lines[i];
     if (/^```/.test(l)) {
       flushPara(); flushList();
-      const code = []; i++;
+      const lang = l.slice(3).trim() || "code", code = []; i++;
       while (i < lines.length && !lines[i].startsWith("```")) code.push(lines[i++]);
-      out.push("<pre><code>" + esc(code.join("\n")) + "</code></pre>"); i++; continue;
+      out.push('<details class="code"><summary><span>' + esc(lang).toUpperCase() + "</span><small>" + code.length + (code.length === 1 ? " regel" : " regels") +
+        "</small></summary><pre><code>" + esc(code.join("\n")) + "</code></pre></details>"); i++; continue;
+    }
+    if (l.startsWith("\u2063tool ")) {
+      flushPara(); flushList();
+      const [name, ...rest] = l.slice(6).split(" · ");
+      out.push('<div class="tool"><b>' + esc(name) + "</b>" + (rest.length ? "<span>" + esc(rest.join(" · ")) + "</span>" : "") + "</div>");
+      i++; continue;
     }
     const h = l.match(/^(#{1,4})\s+(.*)/);
     const ul = l.match(/^\s*[-*]\s+(.*)/), ol = l.match(/^\s*\d+[.)]\s+(.*)/);
@@ -569,7 +590,11 @@ function fillBot(n, t) {
 }
 
 function addBot(t) { const n = botNode(t.model); fillBot(n, t); $("log").append(n); scrollDown(); }
-function scrollDown() { const l = $("log"); l.scrollTop = l.scrollHeight; }
+// follow new text only when you are already at the bottom, so you can scroll up while Claude writes
+function scrollDown(force = true) {
+  const l = $("log");
+  if (force || l.scrollHeight - l.scrollTop - l.clientHeight < 120) l.scrollTop = l.scrollHeight;
+}
 
 /* --- lopend werk: per baan (Claude / GPU) één taak, en je kan intussen vrij wisselen --- */
 const fmtTime = (j) => ((Date.now() - j.start) / 1000).toFixed(1).replace(".", ",") + " s";
@@ -644,14 +669,18 @@ window.hygra = {
   delta(id, text) {
     const j = lanes.claude;
     if (!j || j.id !== id) return;
-    j.text += text; j.state = "SCHRIJFT"; refreshUi();
+    const stick = j.node.isConnected && $("log").scrollHeight - $("log").scrollTop - $("log").clientHeight < 120;
+    // keep the code blocks you opened open while the text is redrawn
+    const open = [...j.body.querySelectorAll("details")].map((d) => d.open);
+    j.text += text; j.state = text.startsWith("\n\n\u2063tool ") ? "WERKT" : "SCHRIJFT"; refreshUi();
     j.body.innerHTML = markdown(j.text) + '<span class="caret"></span>';
-    if (j.node.isConnected) scrollDown();
+    j.body.querySelectorAll("details").forEach((d, k) => { if (open[k]) d.open = true; });
+    if (stick) scrollDown();
   },
   status(id, s) {
     const j = lanes.claude;
     if (!j || j.id !== id) return;
-    j.state = s === "denkt na" ? "DENKT NA" : "SCHRIJFT"; refreshUi();
+    j.state = s === "denkt na" ? "DENKT NA" : s === "werkt" ? "WERKT" : "SCHRIJFT"; refreshUi();
   },
 };
 
@@ -702,7 +731,7 @@ async function send(e) {
   if (job.node.isConnected) {
     if (model === "claude") fillBot(job.node, turn);
     else { const n = botNode(model); fillBot(n, turn); job.node.replaceWith(n); }
-    scrollDown();
+    scrollDown(false);
   }
   if (chats.includes(chat)) { save(); renderHistory(); }
   if (lane === "gpu") warm();
