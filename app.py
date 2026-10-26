@@ -10,9 +10,11 @@ directly through `window.pywebview.api`. Two kinds of partner:
 import json
 import ctypes
 import os
+import re
 import sys
 import threading
 import time
+import urllib.parse
 from types import SimpleNamespace
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -94,6 +96,18 @@ class Api:
         flush()
         return res
 
+    # ----- files named in a reply: links only for files that really exist
+    def paths(self, items, cwd=None):
+        """Maps each mention (absolute, ~, relative to the chat folder, file:///, with :line) to its full path, or None."""
+        return {s: _resolve(s, cwd) for s in items}
+
+    def open_path(self, path):
+        try:
+            os.startfile(path)   # default app; folders open in Explorer
+            return True
+        except OSError as e:
+            return {"error": str(e)}
+
     # ----- local NCM models
     def warmup(self, model):
         with self.lock:
@@ -132,6 +146,19 @@ class Api:
             return {"completion": text, "levels": levels, "ms": round(ms), "chunks": chunks}
         except Exception as e:  # shown in the chat instead of failing silently
             return {"error": str(e)}
+
+
+def _resolve(s, cwd=None):
+    p = urllib.parse.unquote(s.strip().strip("`'\"<>"))
+    p = re.sub(r"^file:/*", "", p, flags=re.I)
+    p = re.sub(r"(#L\d+.*|:\d+(:\d+)?(-\d+)?)$", "", p)   # file.py:12, file.py:12:3, file.py#L12
+    if re.match(r"^[a-z]+://", p, re.I) or not p:
+        return None
+    p = os.path.expanduser(p)
+    if not os.path.isabs(p):
+        p = os.path.join(cwd if cwd and os.path.isdir(cwd) else claude_chat.WORKDIR, p)
+    p = os.path.normpath(p)
+    return p if os.path.exists(p) else None
 
 
 def set_icon(window):

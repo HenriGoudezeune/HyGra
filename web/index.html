@@ -105,6 +105,8 @@ pre { margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 15px; line
 body.funky .md details.code { border-left-color: var(--f2); }
 .md strong { color: #FFF1CC; }
 .md a { color: var(--mint); }
+.md a.file { text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
+.md a.file:hover, .md a.file:hover code { color: var(--mustard); }
 .caret { display: inline-block; width: 10px; height: 18px; background: var(--mint); vertical-align: -3px; animation: blink .8s infinite steps(2); }
 .icon-btn { width: 44px; height: 44px; background: transparent; border: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .icon-btn:hover svg path { stroke: var(--mustard); }
@@ -482,6 +484,10 @@ marked.use({
         "</small></summary><pre><code>" + esc(text) + "</code></pre></details>";
     },
     html({ text }) { return esc(text); },   // ruwe HTML gewoon als tekst tonen
+    link({ href, tokens }) {   // [naam](pad) naar een bestand: kandidaat voor linkFiles, geen web-link
+      if (/^(?:https?|mailto):/i.test(href) || href.startsWith("#")) return false;
+      return '<span data-p="' + esc(href) + '">' + this.parser.parseInline(tokens) + "</span>";
+    },
   },
   extensions: [
     { name: "tool", level: "block", start: (s) => s.indexOf("⁣tool "),
@@ -498,9 +504,51 @@ marked.use({
       renderer: (t) => tex(t.text, t.display) },
   ],
 });
-DOMPurify.addHook("afterSanitizeAttributes", (n) => { if (n.tagName === "A") { n.setAttribute("target", "_blank"); n.setAttribute("rel", "noreferrer"); } });
+DOMPurify.addHook("afterSanitizeAttributes", (n) => { if (n.tagName === "A" && n.hasAttribute("href")) { n.setAttribute("target", "_blank"); n.setAttribute("rel", "noreferrer"); } });
 function markdown(src) {
   return DOMPurify.sanitize(marked.parse(src.replace(/\r/g, "")), { ADD_ATTR: ["target"] });
+}
+
+/* --- bestanden in een antwoord: klikbaar, maar alleen als ze echt bestaan --- */
+const pathCache = new Map(), pathAsking = new Set();   // map + "|" + vermelding → volledig pad (of null)
+const PATH_RE = /(?:file:\/\/\/?)?(?:[A-Za-z]:[\\/]|~[\\/])[^\s<>"'`|*?]*|[\w.\-]+(?:[\\/][\w.\-]+)*\.[A-Za-z0-9]{1,8}:\d+(?::\d+)?/g;
+function looksLikePath(s) {
+  if (!s || s.length > 260 || s.includes("\n")) return false;
+  return /^(?:file:|[A-Za-z]:[\\/]|~[\\/]|\.{1,2}[\\/])/.test(s) || /^[^\s(){}=,;]*[\\/][^\s(){}=,;]*$/.test(s)
+    || /^[\w.\-]+\.[A-Za-z0-9]{1,8}(?::\d+(?::\d+)?)?$/.test(s);
+}
+function linkFiles(root, cwd) {
+  const key = (cwd || "") + "|";
+  root.querySelectorAll("code").forEach((c) => {
+    const s = c.textContent.trim();
+    if (!c.closest("pre, a, [data-p]") && looksLikePath(s)) c.dataset.p = s;
+  });
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT,
+    { acceptNode: (n) => n.parentElement.closest("code, pre, a, .katex, [data-p]") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+  const texts = []; while (walk.nextNode()) texts.push(walk.currentNode);
+  texts.forEach((n) => {   // kale paden in de tekst: C:\..., ~/..., bestand.py:12
+    const s = n.nodeValue, frag = document.createDocumentFragment(); let i = 0;
+    s.replace(PATH_RE, (m, at) => {
+      m = m.replace(/[.,;:!?)\]]+$/, "");
+      if (!m || at < i) return;
+      const sp = document.createElement("span"); sp.dataset.p = m; sp.textContent = m;
+      frag.append(s.slice(i, at), sp); i = at + m.length;
+    });
+    if (i) { frag.append(s.slice(i)); n.replaceWith(frag); }
+  });
+  const ask = [];
+  root.querySelectorAll("[data-p]").forEach((el) => {
+    const k = key + el.dataset.p;
+    if (!pathCache.has(k)) { if (!pathAsking.has(k)) { pathAsking.add(k); ask.push(el.dataset.p); } return; }
+    const full = pathCache.get(k);
+    if (!full) return;
+    const a = document.createElement("a"); a.className = "file"; a.href = "#"; a.dataset.full = full; a.title = full;
+    el.replaceWith(a); a.append(el); delete el.dataset.p;
+  });
+  if (ask.length) api().paths(ask, cwd || null).then((r) => {
+    ask.forEach((s) => { pathCache.set(key + s, r[s] || null); pathAsking.delete(key + s); });
+    if (root.isConnected) linkFiles(root, cwd);
+  }).catch(() => ask.forEach((s) => pathAsking.delete(key + s)));
 }
 
 /* --- geschiedenis --- */
@@ -655,10 +703,10 @@ function botNode(model) {
   return n;
 }
 
-function fillBot(n, t) {
+function fillBot(n, t, cwd) {
   const body = n.querySelector(".body");
   if (t.error) { body.className = "body"; body.innerHTML = '<pre class="err"></pre>'; body.firstChild.textContent = "Fout: " + t.error; }
-  else if (t.model === "claude") { body.className = "body md"; body.innerHTML = markdown(t.text || ""); }
+  else if (t.model === "claude") { body.className = "body md"; body.innerHTML = markdown(t.text || ""); linkFiles(body, cwd); }
   else { body.innerHTML = "<pre></pre>"; body.firstChild.textContent = t.completion || "(niets gegenereerd)"; }
   n.querySelector(".what").textContent = t.model === "claude" ? "CLAUDE OPUS 5.5"
     : MODEL_LABEL[t.model] + " · " + (t.chunks || 0) + " CHUNK" + (t.chunks === 1 ? "" : "S") + " · 9 STAPPEN ELK";
@@ -690,7 +738,7 @@ function fillBot(n, t) {
   }
 }
 
-function addBot(t) { const n = botNode(t.model); fillBot(n, t); $("log").append(n); scrollDown(); }
+function addBot(t) { const n = botNode(t.model); fillBot(n, t, current && current.cwd); $("log").append(n); scrollDown(); }
 // follow new text only when you are already at the bottom, so you can scroll up while Claude writes
 function scrollDown(force = true) {
   const l = $("log");
@@ -775,6 +823,7 @@ window.hygra = {
     const open = [...j.body.querySelectorAll("details")].map((d) => d.open);
     j.text += text; j.state = text.startsWith("\n\n\u2063tool ") ? "WERKT" : "SCHRIJFT"; refreshUi();
     j.body.innerHTML = markdown(j.text) + '<span class="caret"></span>';
+    linkFiles(j.body, j.chat.cwd);
     j.body.querySelectorAll("details").forEach((d, k) => { if (open[k]) d.open = true; });
     if (stick) scrollDown();
   },
@@ -832,7 +881,7 @@ async function send(e) {
   Object.assign(turn, r, { seconds: (Date.now() - t0) / 1000 });
   endJob(lane);
   if (job.node.isConnected) {
-    if (model === "claude") fillBot(job.node, turn);
+    if (model === "claude") fillBot(job.node, turn, chat.cwd);
     else { const n = botNode(model); fillBot(n, turn); job.node.replaceWith(n); }
     scrollDown(false);
   }
@@ -928,6 +977,12 @@ $("hist-src").onclick = (e) => {
   renderHistory();
 };
 $("hist-find").oninput = renderHistory;
+$("log").addEventListener("click", (e) => {   // bestandslink: openen met de standaard-app (map → Verkenner)
+  const a = e.target.closest("a.file");
+  if (!a) return;
+  e.preventDefault();
+  api().open_path(a.dataset.full).then((r) => { if (r && r.error) setStatus("Kan niet openen: " + r.error); });
+});
 $("new").onclick = () => { current = null; renderAll(); $("prompt").focus(); };
 $("temp").oninput = () => $("tval").textContent = (+$("temp").value).toFixed(1);
 $("chunks").oninput = () => $("cval").textContent = $("chunks").value;
