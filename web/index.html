@@ -817,11 +817,10 @@ async function send(e) {
 function applyModel() {
   $("local-opts").classList.toggle("hidden", isClaude());
   const ext = current && current.ext;
-  $("prompt").placeholder = ext && current.source === "cowork" ? "Cowork-gesprek: alleen lezen. Een bericht start een nieuw gesprek."
-    : ext && isClaude() ? "Zet dit Claude Code-gesprek verder…  (Enter = versturen, Shift+Enter = nieuwe regel)"
-    : isClaude()
-    ? "Vraag Claude iets…  (Enter = versturen, Shift+Enter = nieuwe regel)"
-    : "Typ het begin van een functie…  (Enter = versturen, Shift+Enter = nieuwe regel)";
+  $("prompt").placeholder = ext && current.source === "cowork" ? "Alleen lezen — typ om een nieuw gesprek te starten"
+    : ext && isClaude() ? "Ga verder…"
+    : isClaude() ? "Vraag Claude iets…"
+    : "Begin van een functie…";
 }
 
 // zorgt dat het gekozen lokale model op de GPU staat; is de GPU bezig, dan volgt het daarna
