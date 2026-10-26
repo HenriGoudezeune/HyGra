@@ -80,7 +80,7 @@ def load_decoder(path, vq, dev):
     return dec
 
 
-def next_chunk(vq, gen, enc, context, temperature, top_k, dev, decoder=None):
+def next_chunk(vq, gen, enc, context, temperature, top_k, dev, decoder=None, on_level=None):
     """Stage-1 BPE ids of the context -> ids of the next chunk."""
     if hasattr(gen, "encode_prefix"):   # Qwen backbone reads the text itself
         prefix = gen.encode_prefix([enc.decode(context)], dev)
@@ -90,7 +90,7 @@ def next_chunk(vq, gen, enc, context, temperature, top_k, dev, decoder=None):
         window = [enc.eot_token] * (W - len(window)) + window
         prefix = vq.encode_chunks(torch.tensor([window], device=dev))
     with torch.autocast("cuda", dtype=torch.bfloat16, enabled=dev == "cuda"):
-        f_hat, cums = gen.generate(prefix, vq.quant, temperature, top_k)
+        f_hat, cums = gen.generate(prefix, vq.quant, temperature, top_k, on_level)
         if decoder is None:
             return vq.decode(f_hat).argmax(-1)[0].tolist(), cums
         L = vq.cfg.context_length

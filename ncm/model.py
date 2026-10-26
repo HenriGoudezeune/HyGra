@@ -220,7 +220,7 @@ class CoarseToFine(nn.Module):
         return loss, acc
 
     @torch.no_grad()
-    def generate(self, prefix, quant: MultiScaleRVQ, temperature=1.0, top_k=50):
+    def generate(self, prefix, quant: MultiScaleRVQ, temperature=1.0, top_k=50, on_level=None):
         """Coarse-to-fine: one forward pass per level. Returns final f_hat and cumulative f_hats."""
         B, dev = self.batch_info(prefix)
         f_hat = torch.zeros(B, quant.T, quant.dim, device=dev)
@@ -238,6 +238,8 @@ class CoarseToFine(nn.Module):
                 idx = torch.multinomial(probs.reshape(-1, probs.size(-1)), 1).view(B, -1)
             f_hat = f_hat + quant.level_contribution(k, idx).float()
             cums.append(f_hat)
+            if on_level:
+                on_level(k)
             if k + 1 < len(self.levels):
                 level_inputs.append(quant.down(f_hat, self.levels[k + 1]))
         return f_hat, cums
