@@ -41,6 +41,8 @@ class Api:
         self._hwnd = None
         self._ready = threading.Event()
         self._booting = False
+        self._procs = {}                  # message id -> running Claude Code process (one per chat)
+        self._stopped = set()             # message ids the user stopped
 
     def _start_boot(self):
         """Called once the page (with its loading screen) is on screen: importing torch holds the GIL,
@@ -115,9 +117,30 @@ class Api:
             if self._window:
                 self._window.evaluate_js(f"hygra.status({json.dumps(msg_id)}, {json.dumps(s)})")
 
-        res = claude_chat.reply(session_id, bool(first), prompt, on_text, on_status, cwd=cwd)
+        res = claude_chat.reply(session_id, bool(first), prompt, on_text, on_status, cwd=cwd,
+                                on_start=lambda p: self._procs.__setitem__(msg_id, p))
+        self._procs.pop(msg_id, None)
         flush()
+        if msg_id in self._stopped:
+            self._stopped.discard(msg_id)
+            return {"stopped": True, "limits": res.get("limits")}
         return res
+
+    def has_session(self, session_id):
+        return claude_chat.session_exists(session_id)
+
+    def stop(self, msg_id):
+        """Stop button: ends that Claude reply, or the local completion that is running."""
+        self._stopped.add(msg_id)
+        proc = self._procs.get(msg_id)
+        if proc:
+            claude_chat.stop(proc)
+        return True
+
+    def flash(self):
+        """Lets the taskbar button blink until HyGra is brought to the front (only if it is not already)."""
+        if self._hwnd and ctypes.windll.user32.GetForegroundWindow() != self._hwnd:
+            _flash_taskbar(self._hwnd)
 
     def taskbar(self, busy):
         """Indeterminate progress on the taskbar button while something is thinking, so you see it from elsewhere."""
@@ -144,7 +167,7 @@ class Api:
             self._use(model)
         return True
 
-    def complete(self, prompt, model, temperature, chunks):
+    def complete(self, prompt, model, temperature, chunks, msg_id=None):
         self._ready.wait()
         try:
             if model not in MODELS:
@@ -159,6 +182,8 @@ class Api:
                 t0 = time.time()
                 for c in range(chunks):
                     def tick(k, c=c):   # live progress in the window: chunk c, level k done
+                        if msg_id in self._stopped:
+                            raise _Stopped
                         if self._window:
                             self._window.evaluate_js(f"progress({c}, {k}, {chunks})")
                     new, cums = next_chunk(vq, gen, enc, context + out, float(temperature), 20, self.dev, dec, tick)
@@ -174,8 +199,25 @@ class Api:
             if prompt.lstrip().startswith(("def ", "class ", "async def ")):
                 text = cut_function(prompt, text)[len(prompt):]
             return {"completion": text, "levels": levels, "ms": round(ms), "chunks": chunks}
+        except _Stopped:
+            return {"stopped": True}
         except Exception as e:  # shown in the chat instead of failing silently
             return {"error": str(e)}
+        finally:
+            self._stopped.discard(msg_id)
+
+
+class _Stopped(Exception):
+    pass
+
+
+def _flash_taskbar(hwnd):
+    """FlashWindowEx: the taskbar button blinks orange until the window comes to the front."""
+    class FLASHWINFO(ctypes.Structure):
+        _fields_ = [("cbSize", ctypes.c_uint), ("hwnd", ctypes.c_void_p), ("dwFlags", ctypes.c_uint),
+                    ("uCount", ctypes.c_uint), ("dwTimeout", ctypes.c_uint)]
+    info = FLASHWINFO(ctypes.sizeof(FLASHWINFO), hwnd, 0x3 | 0xC, 0, 0)   # FLASHW_ALL | FLASHW_TIMERNOFG
+    ctypes.windll.user32.FlashWindowEx(ctypes.byref(info))
 
 
 def _resolve(s, cwd=None, bases=()):

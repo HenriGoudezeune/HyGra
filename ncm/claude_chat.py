@@ -71,9 +71,22 @@ def forget(session_id):
         os.remove(f)
 
 
-def reply(session_id, first, prompt, on_text, on_status, model=MODEL, cwd=None):
+def session_exists(session_id):
+    """True once Claude Code has written a transcript for this session (also after a stopped first reply)."""
+    return bool(glob.glob(os.path.join(os.path.expanduser("~"), ".claude", "projects", "*", f"{session_id}.jsonl")))
+
+
+def stop(proc):
+    """Ends a running reply, with everything Claude Code started under it (tools, shells)."""
+    if proc.poll() is None:
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
+
+def reply(session_id, first, prompt, on_text, on_status, model=MODEL, cwd=None, on_start=None):
     """Streams the answer through on_text; returns the final text and token counts, or an error.
-    cwd: the folder of an earlier Claude Code session that is continued here (--resume looks there)."""
+    cwd: the folder of an earlier Claude Code session that is continued here (--resume looks there).
+    on_start(proc): gets the running process, so the caller can stop it."""
     exe = shutil.which("claude")
     if not exe:
         return {"error": "Claude Code (de 'claude'-opdracht) is niet gevonden. Installeer het en log in met je Pro-account."}
@@ -85,6 +98,8 @@ def reply(session_id, first, prompt, on_text, on_status, model=MODEL, cwd=None):
     proc = subprocess.Popen(cmd, cwd=cwd if cwd and os.path.isdir(cwd) else WORKDIR, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, text=True, encoding="utf-8",
                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if on_start:
+        on_start(proc)
     proc.stdin.write(prompt)
     proc.stdin.close()
     result, text, limits, new_block = None, [], None, False
