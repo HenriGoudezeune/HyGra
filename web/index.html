@@ -244,6 +244,12 @@ nav .del.arm svg { display: none; }
 .ubar .track { height: 12px; background: var(--olive-line); clip-path: polygon(0 0, 100% 0, calc(100% - 7px) 100%, 0 100%); }
 .ubar .track i { display: block; height: 100%; width: 0; background: var(--c, var(--mint)); transition: width .4s; }
 .ubar small, .usage .at { font-size: 12px; color: var(--text-mute); letter-spacing: .5px; }
+/* ingeklapt: enkel de 5-uursbalk met procent; uitklappen toont week, resets en vernieuwen */
+.usage-toggle { display: flex; align-items: center; gap: 10px; background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; }
+.usage-toggle::before { content: ""; border-left: 8px solid var(--mustard); border-top: 6px solid transparent; border-bottom: 6px solid transparent; transition: transform .15s; }
+.usage.open .usage-toggle::before { transform: rotate(90deg); }
+.usage-toggle:hover .label { color: var(--text); }
+.usage:not(.open) .ubar[data-k="seven_day"], .usage:not(.open) .ubar small, .usage:not(.open) .at, .usage:not(.open) #usage-refresh { display: none; }
 /* funky mode: randen wisselen van kleur en Claude surft over het scherm zolang er iets bezig is */
 @property --f1 { syntax: '<color>'; inherits: true; initial-value: #FF7A1A; }
 @property --f2 { syntax: '<color>'; inherits: true; initial-value: #FF7A1A; }
@@ -354,7 +360,7 @@ body.surfing .surfer { display: block; }
     <div class="settings">
       <div class="usage" id="usage">
         <div class="usage-head">
-          <span class="label">GEBRUIK · CLAUDE PRO</span>
+          <button class="usage-toggle" id="usage-toggle" type="button" aria-expanded="false" aria-controls="usage"><span class="label">GEBRUIK · CLAUDE PRO</span></button>
           <button class="icon-btn" id="usage-refresh" type="button" aria-label="Gebruik vernieuwen" title="Vernieuwen (een piepkleine Haiku-vraag)">
             <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M17 8 A7 7 0 1 0 17 12" stroke="#7FE0C8" stroke-width="3" fill="none"/><path d="M13 2 L18 8 L11 9 Z" fill="#7FE0C8"/></svg>
           </button>
@@ -1129,6 +1135,16 @@ window.addEventListener("pywebviewready", async () => {
 $("model").onchange = onModelChange;
 initPick($("model"));
 $("usage-refresh").onclick = refreshUsage;
+function setUsageOpen(on) {
+  $("usage").classList.toggle("open", on);
+  $("usage-toggle").setAttribute("aria-expanded", on ? "true" : "false");
+}
+try { setUsageOpen(localStorage.getItem("hygra-usage-open") === "1"); } catch {}
+$("usage-toggle").onclick = () => {
+  const on = !$("usage").classList.contains("open");
+  setUsageOpen(on);
+  try { localStorage.setItem("hygra-usage-open", on ? "1" : "0"); } catch {}
+};
 try { $("funky").checked = localStorage.getItem("hygra-funky") === "1"; } catch {}
 function syncVerbose() {
   document.body.classList.toggle("verbose", $("verbose").checked);
