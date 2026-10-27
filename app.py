@@ -225,10 +225,13 @@ class Api:
             _flash_taskbar(self._hwnd)
 
     def theme(self, name):
-        """Remembers the page's theme outside WebView2, so the native splash (ncm/splash.py) starts in it too."""
-        path = os.path.join(os.environ.get("LOCALAPPDATA", ROOT), "HyGra", "theme.txt")
+        """Remembers the page's theme outside WebView2, so the native splash (ncm/splash.py) starts in it too.
+        Not in --background: a test instance has its own localStorage and must not change his splash."""
+        if BACKGROUND:
+            return True
+        from ncm.splash import THEME_FILE
         try:
-            with open(path, "w", encoding="utf-8") as f:
+            with open(THEME_FILE, "w", encoding="utf-8") as f:
                 f.write("cyber" if name == "cyber" else "hg")
         except OSError:
             pass
@@ -410,11 +413,19 @@ def reveal(window, api):
     api._start_boot()
 
 
+def _window_bg():
+    """The window's color before the page paints: the saved theme's ground, so nothing flashes between splash and page."""
+    if sys.platform != "win32":
+        return "#3B461C"
+    from ncm.splash import saved_theme
+    return "#101018" if saved_theme() == "cyber" else "#3B461C"
+
+
 if __name__ == "__main__":
     api = Api()
     api._window = webview.create_window("HyGra", os.path.join(ROOT, "web", "index.html"), js_api=api,
                                        width=SIZE[0], height=SIZE[1], min_size=(420, 600),
-                                       background_color="#3B461C", hidden=splash is not None or BACKGROUND,
+                                       background_color=_window_bg(), hidden=splash is not None or BACKGROUND,
                                        focus=not BACKGROUND)
     if sys.platform == "win32":
         api._window.events.shown += lambda: set_icon(api._window)

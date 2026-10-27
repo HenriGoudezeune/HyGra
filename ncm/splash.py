@@ -51,14 +51,22 @@ gdip.GdipCreateFromHDC.argtypes = [HANDLE, ctypes.POINTER(HANDLE)]
 OLIVE, OLIVE_DEEP = 0x3B461C, 0x2E3714
 ORANGE, MUSTARD, MINT, TEXT = 0xFF7A1A, 0xF2C14E, 0x7FE0C8, 0xF4E4BC
 FACE, LINE = "Chakra Petch", 6
-try:   # the theme the page chose last (Api.theme), so the splash matches #boot in it
-    with open(os.path.join(os.environ.get("LOCALAPPDATA", ""), "HyGra", "theme.txt"), encoding="utf-8") as _f:
-        if _f.read().strip() == "cyber":   # body.cyber in web/index.html
-            OLIVE, OLIVE_DEEP = 0x101018, 0x08080D
-            ORANGE, MUSTARD, MINT, TEXT = 0xFF5A4F, 0xFCEE0A, 0x00F0FF, 0xDDF6F8
-            FACE, LINE = "Rajdhani", 3
-except OSError:
-    pass
+THEME_FILE = os.path.join(os.environ.get("LOCALAPPDATA", ""), "HyGra", "theme.txt")
+
+
+def saved_theme():
+    """The theme the page chose last ('cyber' or 'hg'); Api.theme in app.py writes it."""
+    try:
+        with open(THEME_FILE, encoding="utf-8") as f:
+            return "cyber" if f.read().strip() == "cyber" else "hg"
+    except OSError:
+        return "hg"
+
+
+if saved_theme() == "cyber":   # body.cyber in web/index.html, so the splash matches #boot
+    OLIVE, OLIVE_DEEP = 0x101018, 0x08080D
+    ORANGE, MUSTARD, MINT, TEXT = 0xFF5A4F, 0xFCEE0A, 0x00F0FF, 0xDDF6F8
+    FACE, LINE = "Rajdhani", 3
 WM_DESTROY, WM_CLOSE, WM_PAINT, WM_ERASEBKGND, WM_TIMER, WM_APP = 0x2, 0x10, 0xF, 0x14, 0x113, 0x8000
 CLASS = "HyGraSplash"
 
