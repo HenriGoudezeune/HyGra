@@ -21,6 +21,14 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 os.chdir(ROOT)
 sys.path.insert(0, ROOT)
 
+SIZE = (1280, 860)
+splash = None
+if __name__ == "__main__" and sys.platform == "win32":
+    # before anything heavy: own taskbar group + icon instead of Python's, and the loading screen at once
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("hydrargyrum.hygra")
+    from ncm.splash import Splash
+    splash = Splash(ROOT, *SIZE)
+
 import webview  # noqa: E402
 
 from ncm import claude_chat, history  # noqa: E402
@@ -53,6 +61,7 @@ class Api:
 
     def _boot(self):
         global torch, cut_function, load, load_decoder, next_chunk
+        claude_chat.tidy()
         try:
             import torch
             from eval_code import cut_function, load, load_decoder, next_chunk
@@ -99,7 +108,16 @@ class Api:
             return {"error": str(e)}
 
     def claude(self, session_id, first, prompt, msg_id, cwd=None):
-        """Streams the reply into the page (hygra.delta / hygra.status) and returns the final turn."""
+        """Streams the reply into the page (hygra.delta / hygra.status) and returns the final turn.
+        Claude Code runs detached: if HyGra closes meanwhile, it finishes anyway and claude_attach picks it up."""
+        pid = claude_chat.start(msg_id, session_id, bool(first), prompt, cwd=cwd)
+        if isinstance(pid, dict):
+            return pid
+        self._procs[msg_id] = pid
+        return self.claude_attach(msg_id)
+
+    def claude_attach(self, msg_id):
+        """Follows a reply that is running (or finished) as a job, from the start of its output."""
         buf, last = [], [time.time()]
 
         def flush():
@@ -117,8 +135,7 @@ class Api:
             if self._window:
                 self._window.evaluate_js(f"hygra.status({json.dumps(msg_id)}, {json.dumps(s)})")
 
-        res = claude_chat.reply(session_id, bool(first), prompt, on_text, on_status, cwd=cwd,
-                                on_start=lambda p: self._procs.__setitem__(msg_id, p))
+        res = claude_chat.follow(msg_id, on_text, on_status)
         self._procs.pop(msg_id, None)
         flush()
         if msg_id in self._stopped:
@@ -132,9 +149,14 @@ class Api:
     def stop(self, msg_id):
         """Stop button: ends that Claude reply, or the local completion that is running."""
         self._stopped.add(msg_id)
-        proc = self._procs.get(msg_id)
-        if proc:
-            claude_chat.stop(proc)
+        pid = self._procs.get(msg_id) or claude_chat.job_pid(msg_id)
+        if pid:
+            claude_chat.stop(pid)
+        return True
+
+    def claude_done(self, msg_id):
+        """The page has saved the reply, so its job folder is no longer needed."""
+        claude_chat.done(msg_id)
         return True
 
     def flash(self):
@@ -283,16 +305,33 @@ def set_icon(window):
         store.Commit()
 
 
+def reveal(window, api):
+    """The page has loaded in the hidden window: put it exactly where the splash is, show it underneath
+    the splash, give WebView2 a few frames to paint, then drop the splash. Only then start the heavy
+    boot (torch holds the GIL and would stall the swap)."""
+    if splash:
+        time.sleep(0.1)   # first paint of the page (fonts, #boot)
+        rect = splash.rect()
+        splash.cover()
+        if rect:
+            ctypes.windll.user32.SetWindowPos(window.native.Handle.ToInt64(), None, *rect, 0x4 | 0x10)   # NOZORDER|NOACTIVATE
+    window.show()
+    if splash:
+        time.sleep(0.3)
+        splash.close()
+    api._start_boot()
+
+
 if __name__ == "__main__":
-    if sys.platform == "win32":   # own taskbar group + icon instead of Python's
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("hydrargyrum.hygra")
     api = Api()
     api._window = webview.create_window("HyGra", os.path.join(ROOT, "web", "index.html"), js_api=api,
-                                       width=1280, height=860, min_size=(420, 600), background_color="#3B461C")
+                                       width=SIZE[0], height=SIZE[1], min_size=(420, 600),
+                                       background_color="#3B461C", hidden=splash is not None)
     if sys.platform == "win32":
         api._window.events.shown += lambda: set_icon(api._window)
         api._window.events.shown += lambda: setattr(api, "_hwnd", api._window.native.Handle.ToInt64() or None)
-    api._window.events.loaded += api._start_boot
+    revealed = threading.Event()   # loaded also fires on a reload; reveal only once
+    api._window.events.loaded += lambda: revealed.is_set() or (revealed.set(), reveal(api._window, api))
     # not private: localStorage (funky mode, filters, ...) must survive a restart
     webview.start(private_mode=False,
                   storage_path=os.path.join(os.environ.get("LOCALAPPDATA", ROOT), "HyGra", "webview"))
