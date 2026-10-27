@@ -16,11 +16,12 @@ HyGra (from *HydrarGyrum*, Hg, element 80) runs **Claude Opus 5.5** through Clau
 - **Replies survive closing the app.** A reply keeps running when you close HyGra and appears when you open it again.
 - **Talk while Claude works.** Type during a reply and Claude takes your message in mid-turn, as in Claude Code. Esc stops it.
 - **All your history in one list.** HyGra lists your Claude Code and Cowork sessions next to its own chats, with filters and search. You can continue Code sessions right in HyGra.
-- **ChatGPT and Gemini too.** Pick ChatGPT (through the [Codex](https://github.com/openai/codex) CLI, on a free ChatGPT account) or Gemini (through the Antigravity CLI, on your Google account; HyGra takes the best Gemini your account offers, Pro if you have it). Each chat keeps its own conversation per model, and a model you switch to gets the turns it missed as context. Usage bars, local-model settings and mid-turn messages only show where they belong.
+- **ChatGPT and Gemini too.** Pick ChatGPT (through the [Codex](https://github.com/openai/codex) CLI, on a free ChatGPT account) or Gemini (through the Antigravity CLI, on your Google account; HyGra takes the best Gemini your account offers, Pro if you have it). Each chat keeps its own conversation per model, and a model you switch to gets the turns it missed as context. Local-model settings and mid-turn messages only show where they belong.
 - **Remote Control.** Every chat is also a session in the Claude mobile app and on claude.ai/code while a reply runs.
 - **See what Claude does.** *Details* (Ctrl+O) opens each tool call to its input and output, and shows Claude's thinking.
 - **Readable replies.** Markdown, KaTeX math, code blocks that start collapsed, and file paths you can click to open.
-- **Usage at a glance.** Your 5-hour and weekly plan usage, also as a small meter when the sidebar is folded in.
+- **Usage at a glance.** The limits of the plan behind the chosen model: Claude's 5-hour and weekly windows, ChatGPT's and Gemini's own windows. Also as a small meter when the sidebar is folded in.
+- **Models in one panel.** *Modellen beheren* (bottom of the model list, or in settings) shows for every model whether it is installed and who is logged in, with buttons to install, log in, switch account or log out, and a switch to show or hide it in the list. Logging in always happens in the model's own tool and your browser; HyGra never sees a password.
 - **Feels native.** A splash screen in your theme, taskbar progress while Claude works, a blinking taskbar button when a reply lands, and a Start-menu shortcut. It works offline: fonts and libraries are bundled.
 
 ## Themes
@@ -51,7 +52,7 @@ Pick one in the settings panel (the sliders button next to the logo, or **Ctrl+,
 
 ## Install
 
-Windows 10/11, Python 3.10–3.13 with [uv](https://docs.astral.sh/uv/), and the [Claude Code](https://claude.com/claude-code) CLI logged in with your Claude subscription (run `claude` once in a terminal).
+Windows 10/11 and Python 3.10–3.13 with [uv](https://docs.astral.sh/uv/). Then pick your models in the app: open *Modellen beheren* and click INSTALLEREN and INLOGGEN for each one you want. Claude needs a Pro/Max subscription; ChatGPT works with a free account; Gemini with any Google account (Pro models if your account has them).
 
 ```powershell
 git clone https://github.com/HenriGoudezeune/HyGra
@@ -63,7 +64,7 @@ uv run python app.py                # or start it from the Start menu
 
 - **Billing:** chats count toward your plan's normal usage limits. An `ANTHROPIC_API_KEY` in the environment is deliberately ignored, so HyGra never falls back to paid API billing.
 - **Full access:** each chat runs Claude Code with `--dangerously-skip-permissions`, as in your own terminal. Claude can read, change and run anything on your computer, so only use HyGra on your own machine.
-- **ChatGPT / Gemini:** optional. Install the Codex CLI (`npm i -g @openai/codex`, then `codex login`) and/or the Antigravity CLI (`agy`). They also run with full access.
+- **ChatGPT / Gemini:** optional. The panel installs the Codex CLI (`npm i -g @openai/codex`; Node.js first if needed) and the Antigravity CLI (`winget install Google.AntigravityCLI`), and runs their own login. They also run with full access.
 - **Local models:** the NCM models below need their checkpoints in `ckpt/`. Claude works without them.
 
 ## The experiment inside: Next-Concept Modeling on a laptop

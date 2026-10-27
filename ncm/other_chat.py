@@ -7,11 +7,14 @@ Each HyGra chat keeps one conversation per model (Codex thread id / Antigravity 
 next message resumes it. Like Claude in HyGra they get full access (no permission prompts). One process
 per reply, read through a pipe: unlike Claude's jobs a reply stops when HyGra closes.
 """
+import glob
 import json
 import os
 import shutil
 import subprocess
 import threading
+import time
+from datetime import datetime
 
 from ncm.claude_chat import (DATA, NO_WINDOW, SYSTEM, WORKDIR, result_line, stop, think_line,
                              tool_lines)
@@ -23,7 +26,7 @@ MAX_ARG = 24000   # the Windows command line holds 32767 chars; a longer Gemini 
 _procs = {}       # message id -> running Popen
 _stopped = set()
 _lock = threading.Lock()
-_gemini = None    # (id, label) once asked
+_rows = None      # `agy models` rows once asked
 
 
 def _codex_model():
@@ -37,27 +40,32 @@ def _codex_model():
         return "gpt-6-luna", "GPT-6-Luna"
 
 
-def _gemini_model():
-    """The best Gemini the logged-in Google account offers: Pro (High) if it has it, else Flash (High)."""
-    global _gemini
-    if _gemini:
-        return _gemini
+def gemini_rows(fresh=False):
+    """The Gemini models the logged-in Google account offers ([id, label] rows); empty when not logged in."""
+    global _rows
+    if _rows is not None and not fresh:
+        return _rows
     exe = shutil.which("agy")
     rows = []
     if exe:
         try:
             out = subprocess.run([exe, "models"], capture_output=True, text=True, encoding="utf-8",
                                  errors="replace", timeout=30, creationflags=NO_WINDOW).stdout
-            rows = [l.split("\t", 1) for l in out.splitlines() if l.startswith("gemini-") and "\t" in l]
+            rows = [l.split("	", 1) for l in out.splitlines() if l.startswith("gemini-") and "	" in l]
         except (OSError, subprocess.SubprocessError):
             pass
+    _rows = rows
+    return rows
+
+
+def gemini_model():
+    """The best Gemini the logged-in Google account offers: Pro (High) if it has it, else Flash (High)."""
+    rows = gemini_rows()
 
     def rank(r):
         i = r[0]
         return ("pro" in i) * 4 + ("-high" in i) * 2 + ("-medium" in i)
     best = max(rows, key=rank) if rows else [GEMINI_FALLBACK, "Gemini 3.8 Flash (High)"]
-    if rows:
-        _gemini = (best[0], best[1].strip())
     return best[0], best[1].strip()
 
 
@@ -68,7 +76,7 @@ def models():
         slug, name = _codex_model()
         out["gpt"] = {"label": f"ChatGPT {name} · gratis", "name": f"CHATGPT {name.upper()}", "model": slug}
     if shutil.which("agy"):
-        gid, name = _gemini_model()
+        gid, name = gemini_model()
         out["gemini"] = {"label": f"{name} · Google", "name": name.upper(), "model": gid}
     return out
 
@@ -88,7 +96,7 @@ def _codex(session, prompt):
 
 
 def _agy(session, prompt, msg_id):
-    gid, _ = _gemini_model()
+    gid, _ = gemini_model()
     if not session:
         prompt = f"{SYSTEM}\n\n{prompt}"
     if len(prompt) > MAX_ARG:
@@ -244,3 +252,76 @@ def stop_reply(msg_id):
             _stopped.add(msg_id)
     if p:
         stop(p.pid)
+
+
+# ----- usage: how much of each account's limit is used, as {windows: [{k, label, used 0..1, resets unix}], at}
+def _window_label(minutes):
+    return {300: "5 UUR", 1440: "DAG", 10080: "WEEK", 43200: "30 DAGEN"}.get(minutes) or (
+        f"{minutes // 1440} DAGEN" if minutes % 1440 == 0 else f"{minutes // 60} UUR")
+
+
+def _save_limits(kind, out):
+    if out.get("windows"):
+        out["at"] = time.time()
+        os.makedirs(DATA, exist_ok=True)
+        with open(os.path.join(DATA, f"limits_{kind}.json"), "w", encoding="utf-8") as f:
+            json.dump(out, f)
+    return out
+
+
+def last_limits(kind):
+    try:
+        with open(os.path.join(DATA, f"limits_{kind}.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def codex_limits(thread=None):
+    """Codex writes the ChatGPT plan's rate limits into its session files after every turn: read the newest."""
+    files = glob.glob(os.path.join(os.path.expanduser("~"), ".codex", "sessions", "*", "*", "*",
+                                   f"rollout-*{thread or ''}.jsonl"))
+    for path in sorted(files, key=os.path.getmtime, reverse=True)[:5]:
+        last = None
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                if '"rate_limits"' in line:
+                    last = line
+        if not last:
+            continue
+        rl = (json.loads(last).get("payload") or {}).get("rate_limits") or {}
+        wins = [{"k": k, "label": _window_label(w.get("window_minutes") or 0), "used": (w.get("used_percent") or 0) / 100,
+                 "resets": w.get("resets_at")} for k in ("primary", "secondary") if (w := rl.get(k))]
+        return _save_limits("gpt", {"windows": wins, "plan": (rl.get("plan_type") or "").upper()})
+    return last_limits("gpt")
+
+
+def gemini_limits():
+    """`agy -p /usage` answers without a model call: the Google account's quota per model group."""
+    exe = shutil.which("agy")
+    if not exe:
+        return None
+    try:
+        out = subprocess.run([exe, "--output-format", "json", "--print=/usage"], capture_output=True, text=True,
+                             encoding="utf-8", errors="replace", timeout=30, creationflags=NO_WINDOW).stdout
+        data = json.loads(out)["command"]["data"]
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError):
+        return last_limits("gemini")
+    wins = []
+    for g in data.get("groups") or []:
+        if "gemini" not in (g.get("name") or "").lower():
+            continue
+        for b in g.get("buckets") or []:
+            try:
+                resets = datetime.fromisoformat(b["reset_time"].replace("Z", "+00:00")).timestamp()
+            except (KeyError, ValueError):
+                resets = None
+            wins.append({"k": b.get("id"), "label": {"weekly": "WEEK", "daily": "DAG"}.get(b.get("window"), (b.get("window") or "").upper()),
+                         "used": 1 - (b.get("remaining_fraction") if b.get("remaining_fraction") is not None else 1), "resets": resets})
+    return _save_limits("gemini", {"windows": wins})
+
+
+def limits(kind, refresh=False):
+    if not refresh:
+        return last_limits(kind)
+    return codex_limits() if kind == "gpt" else gemini_limits()

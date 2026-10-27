@@ -275,7 +275,7 @@ nav .del.arm { background: var(--orange) !important; color: var(--olive-deep); }
 nav .del.arm svg { display: none; }
 /* gebruik van het Pro-abonnement */
 .usage { display: flex; flex-direction: column; gap: 12px; }
-body.no-usage .usage, body.no-usage .rail-use { display: none !important; }   /* het abonnementsgebruik is van Claude */
+body.no-usage .usage, body.no-usage .rail-use { display: none !important; }   /* lokale modellen hebben geen abonnement */
 .usage-head { display: flex; align-items: center; justify-content: space-between; min-height: 32px; }
 .usage-head .icon-btn { width: 36px; height: 36px; }
 .usage-head .icon-btn.spin svg { animation: spin 1s linear infinite; }
@@ -291,7 +291,7 @@ body.no-usage .usage, body.no-usage .rail-use { display: none !important; }   /*
 .usage-toggle::before { content: ""; border-left: 8px solid var(--mustard); border-top: 6px solid transparent; border-bottom: 6px solid transparent; transition: transform .15s; }
 .usage.open .usage-toggle::before { transform: rotate(90deg); }
 .usage-toggle:hover .label { color: var(--text); }
-.usage:not(.open) .ubar[data-k="seven_day"], .usage:not(.open) .ubar small, .usage:not(.open) .at, .usage:not(.open) #usage-refresh { display: none; }
+.usage:not(.open) .ubar ~ .ubar, .usage:not(.open) .ubar small, .usage:not(.open) .at, .usage:not(.open) #usage-refresh { display: none; }
 /* funky mode: randen wisselen van kleur en Claude surft over het scherm zolang er iets bezig is */
 @property --f1 { syntax: '<color>'; inherits: true; initial-value: #FF7A1A; }
 @property --f2 { syntax: '<color>'; inherits: true; initial-value: #FF7A1A; }
@@ -374,6 +374,25 @@ body.funky .hist-src button.on, body.funky label.chip:has(input:checked) { borde
 .seg label:has(input:checked) { background: var(--orange); color: var(--olive-deep); }
 .seg label:has(input:focus-visible) { outline: 3px solid var(--mint); outline-offset: 2px; }
 .seg input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.prefs .manage { min-height: 40px; background: none; border: 3px solid var(--olive-line); color: var(--text-dim); font: 600 12px 'Chakra Petch', sans-serif; letter-spacing: 1px; cursor: pointer; }
+.prefs .manage:hover { color: var(--text); border-color: var(--orange); }
+/* MODELLEN: per model installeren, inloggen, uitloggen en tonen of verbergen */
+.models { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; gap: 14px; }
+.models .mhead { display: flex; align-items: center; justify-content: space-between; }
+.models .mhead b { font-size: 16px; letter-spacing: 2px; color: var(--orange); }
+.mrow { display: grid; grid-template-columns: 40px 1fr; gap: 6px 14px; padding: 12px 0; border-top: 3px solid var(--olive-line); }
+.mrow .avatar { grid-row: span 3; }
+.mrow .mname { font-weight: 600; letter-spacing: 1px; color: var(--text); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.mrow .mstate { font: 12px/1.5 'JetBrains Mono', monospace; color: var(--text-mute); overflow-wrap: anywhere; }
+.mrow .mstate.ok { color: var(--mint); } .mrow .mstate .warn { color: var(--orange); }
+.mrow .macts { display: flex; flex-wrap: wrap; gap: 8px; }
+.mrow .macts button { min-height: 34px; padding: 0 12px; background: var(--olive); border: 3px solid var(--orange); color: var(--text); font: 600 12px 'Chakra Petch', sans-serif; letter-spacing: 1px; cursor: pointer; }
+.mrow .macts button.quiet { border-color: var(--olive-line); color: var(--text-dim); background: none; }
+.mrow .macts button:hover { border-color: var(--mustard); }
+.mrow .macts button:disabled { opacity: .5; cursor: default; }
+.mrow label.chip { flex: 0 0 auto; min-height: 30px; font-size: 11px; }
+.models .note { font: 11px/1.6 'JetBrains Mono', monospace; color: var(--text-mute); }
+.pick-list .manage { border-top: 3px solid var(--olive-line) !important; color: var(--mustard) !important; }
 .prefs .keys { font: 11px/1.6 'JetBrains Mono', monospace; color: var(--text-mute); }
 body.funky .prefs { border-color: var(--f1); }
 
@@ -638,13 +657,11 @@ body.waifu.surfing .petals { display: block; }
     <div class="settings">
       <div class="usage" id="usage">
         <div class="usage-head">
-          <button class="usage-toggle" id="usage-toggle" type="button" aria-expanded="false" aria-controls="usage"><span class="label">GEBRUIK · CLAUDE PRO</span></button>
+          <button class="usage-toggle" id="usage-toggle" type="button" aria-expanded="false" aria-controls="usage"><span class="label" id="usage-label">GEBRUIK · CLAUDE PRO</span></button>
           <button class="icon-btn" id="usage-refresh" type="button" aria-label="Gebruik vernieuwen" title="Vernieuwen (een piepkleine Haiku-vraag)">
             <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M17 8 A7 7 0 1 0 17 12" stroke="#7FE0C8" stroke-width="3" fill="none"/><path d="M13 2 L18 8 L11 9 Z" fill="#7FE0C8"/></svg>
           </button>
         </div>
-        <div class="ubar" data-k="five_hour"><div class="row"><span>5 UUR</span><span class="v">–</span></div><div class="track"><i></i></div><small></small></div>
-        <div class="ubar" data-k="seven_day"><div class="row"><span>WEEK</span><span class="v">–</span></div><div class="track"><i></i></div><small></small></div>
         <small class="at" id="usage-at">Nog niet bekend: stuur Claude iets of vernieuw.</small>
       </div>
       <label>MODEL
@@ -683,7 +700,7 @@ body.waifu.surfing .petals { display: block; }
         </label>
       </div>
     </div>
-    <div class="rail-use" id="rail-use" title="Gebruik in het 5-uursvenster"><span class="v">–</span><div class="track"><i></i></div><small>5 UUR</small></div>
+    <div class="rail-use" id="rail-use" title="Gebruik in het 5-uursvenster"><span class="v">–</span><div class="track"><i></i></div><small id="rail-label">5 UUR</small></div>
   </aside>
 
   <main>
@@ -729,7 +746,15 @@ body.waifu.surfing .petals { display: block; }
       DETAILS <kbd>^O</kbd>
     </label>
   </div>
+  <button class="manage" id="manage" type="button">MODELLEN BEHEREN · INLOGGEN</button>
   <small class="keys">CTRL+N nieuw · CTRL+B zijbalk · CTRL+O details · CTRL+, instellingen</small>
+</div>
+
+<div class="prefs models hidden" id="models" role="dialog" aria-label="Modellen" aria-modal="true">
+  <div class="mhead"><b>MODELLEN</b>
+    <button class="icon-btn" id="models-close" type="button" aria-label="Sluiten"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2 L14 14 M14 2 L2 14" stroke="#FF7A1A" stroke-width="3"/></svg></button></div>
+  <div id="model-rows"></div>
+  <small class="note">Inloggen gebeurt in de officiële tool van elk model, in een eigen venster en je browser; HyGra ziet je wachtwoord nooit. Met je abonnement of een gratis account kost het niets extra.</small>
 </div>
 
 <div class="cyber-fx" aria-hidden="true"><i class="beam"></i><i class="slice" style="--y:18%;--h:6px;--c:#FF003C;--t:3.1s;--d:-.4s"></i><i class="slice" style="--y:41%;--h:14px;--c:#00F0FF;--t:2.3s;--d:-1.2s"></i><i class="slice" style="--y:63%;--h:3px;--c:#FCEE0A;--t:3.7s;--d:-2.1s"></i><i class="slice" style="--y:82%;--h:9px;--c:#FF2BD6;--t:2.9s;--d:-.9s"></i><b class="tag">// NETRUNNING</b></div>
@@ -1055,37 +1080,58 @@ function deleteChat(c) {
   if (c === current) { current = null; renderAll(); } else renderHistory();
 }
 
-/* --- gebruik: 5-uursvenster en week van het abonnement --- */
-function renderUsage(l) {
-  if (!l) return;
-  const now = Date.now() / 1000;
-  document.querySelectorAll(".ubar").forEach((row) => {
-    const w = l[row.dataset.k];
-    if (!w || w.used == null) return;
+/* --- gebruik: de limieten van het abonnement van elk chatmodel (Claude: 5 uur + week; ChatGPT, Gemini: hun eigen vensters) --- */
+const usage = {};   // model → laatst bekende limieten
+const USAGE_NAME = { claude: "CLAUDE", gpt: "CHATGPT", gemini: "GEMINI" };
+function usageWindows(model, l) {
+  if (!l) return [];
+  if (model !== "claude") return l.windows || [];
+  return [["five_hour", "5 UUR"], ["seven_day", "WEEK"]].filter(([k]) => l[k] && l[k].used != null)
+    .map(([k, label]) => ({ k, label, used: l[k].used, resets: l[k].resets }));
+}
+function renderUsage(l, model = "claude") {
+  if (l) usage[model] = l;
+  if (model === $("model").value) drawUsage();
+}
+function drawUsage() {
+  const model = $("model").value, l = usage[model];
+  if (!isChatModel(model)) return;
+  const plan = model === "claude" ? "PRO" : l && l.plan ? l.plan : "";
+  $("usage-label").textContent = "GEBRUIK · " + USAGE_NAME[model] + (plan ? " " + plan : "");
+  $("usage-refresh").title = model === "claude" ? "Vernieuwen (een piepkleine Haiku-vraag)" : "Vernieuwen (kost niets)";
+  document.querySelectorAll("#usage .ubar").forEach((n) => n.remove());
+  const now = Date.now() / 1000, wins = usageWindows(model, l);
+  const rail = $("rail-use"), fill = rail.querySelector("i");
+  rail.querySelector(".v").textContent = "–"; fill.style.height = "0";
+  wins.forEach((w, i) => {
+    const row = document.createElement("div"); row.className = "ubar";
+    row.innerHTML = '<div class="row"><span></span><span class="v"></span></div><div class="track"><i></i></div><small></small>';
     const over = w.resets && w.resets < now;   // venster al voorbij: weer bij nul
     const pct = over ? 0 : Math.round(w.used * 100);
+    row.querySelector("span").textContent = w.label;
     row.querySelector(".v").textContent = pct + "%";
-    const bar = row.querySelector(".track i");
-    bar.style.width = Math.min(100, pct) + "%";
-    bar.style.setProperty("--c", pct >= 80 ? "var(--orange)" : pct >= 50 ? "var(--mustard)" : "var(--mint)");
+    const bar = row.querySelector(".track i"), c = pct >= 80 ? "var(--orange)" : pct >= 50 ? "var(--mustard)" : "var(--mint)";
+    bar.style.width = Math.min(100, pct) + "%"; bar.style.setProperty("--c", c);
     const d = new Date(w.resets * 1000);
-    row.querySelector("small").textContent = over ? "venster vernieuwd" : "reset " + (row.dataset.k === "five_hour"
+    row.querySelector("small").textContent = !w.resets ? "" : over ? "venster vernieuwd" : "reset " + (w.resets - now < 86400
       ? d.toLocaleTimeString("nl-BE", { hour: "2-digit", minute: "2-digit" })
-      : d.toLocaleString("nl-BE", { weekday: "short", hour: "2-digit", minute: "2-digit" }));
-    if (row.dataset.k === "five_hour") {   // dezelfde stand op de ingeklapte rail
-      const rail = $("rail-use"), fill = rail.querySelector("i");
-      rail.querySelector(".v").textContent = pct + "%";
-      fill.style.height = Math.min(100, pct) + "%";
-      fill.style.setProperty("--c", bar.style.getPropertyValue("--c"));
+      : w.resets - now < 7 * 86400 ? d.toLocaleString("nl-BE", { weekday: "short", hour: "2-digit", minute: "2-digit" })
+      : d.toLocaleDateString("nl-BE", { day: "numeric", month: "short" }));
+    $("usage-at").before(row);
+    if (i === 0) {   // de eerste balk ook op de ingeklapte rail
+      rail.querySelector(".v").textContent = pct + "%"; $("rail-label").textContent = w.label;
+      fill.style.height = Math.min(100, pct) + "%"; fill.style.setProperty("--c", c);
+      rail.title = "Gebruik: " + w.label.toLowerCase();
     }
   });
-  if (l.at) $("usage-at").textContent = "Bijgewerkt " + new Date(l.at * 1000).toLocaleString("nl-BE", { weekday: "short", hour: "2-digit", minute: "2-digit" });
+  $("usage-at").textContent = l && l.at ? "Bijgewerkt " + new Date(l.at * 1000).toLocaleString("nl-BE", { weekday: "short", hour: "2-digit", minute: "2-digit" })
+    : "Nog niet bekend: stuur " + CHAT[model].name + " iets of vernieuw.";
 }
 async function refreshUsage() {
-  const b = $("usage-refresh");
-  if (b.classList.contains("spin")) return;
+  const b = $("usage-refresh"), model = $("model").value;
+  if (b.classList.contains("spin") || !isChatModel(model)) return;
   b.classList.add("spin");
-  try { renderUsage(await api().limits(true)); } catch {}
+  try { renderUsage(await api().limits(true, model), model); } catch {}
   b.classList.remove("spin");
 }
 
@@ -1125,7 +1171,7 @@ function renderEmpty() {
 function showNoClaude() {
   const card = document.createElement("div"); card.className = "keycard cut";
   card.innerHTML = '<div class="cut-in"><h2>CLAUDE CODE NIET GEVONDEN</h2>' +
-    '<p>HyGra praat met Claude via Claude Code, ingelogd met je Pro-abonnement. Installeer Claude Code, log één keer in met <code>claude</code> in een terminal, en herstart HyGra.</p></div>';
+    '<p>HyGra praat met Claude via Claude Code, ingelogd met je Pro- of Max-abonnement. Open <b>MODELLEN BEHEREN</b> (onderaan de modelkeuze of in de instellingen) om het te installeren en in te loggen.</p></div>';
   $("log").replaceChildren(card);
 }
 
@@ -1381,6 +1427,8 @@ window.hygra = {
     if (!j || j.stopping) return;
     j.state = s === "denkt na" ? thinkWord(j) : s === "werkt" ? "WERKT" : "SCHRIJFT"; refreshUi();
   },
+  usage(model, l) { renderUsage(l, model); },
+  providers() { loadProviders(); },   // een installeer- of inlogvenster ging dicht
   // after the reply was already done: usage, and rarely more text (Claude went on after a background task)
   late(id, x) {
     if (x.limits) renderUsage(x.limits);
@@ -1520,7 +1568,8 @@ function resumeClaude() {
 function applyModel() {
   // per model enkel wat erbij hoort: het Claude-gebruik bij Claude, temperatuur en lengte bij de lokale modellen
   $("local-opts").classList.toggle("hidden", isChat());
-  document.body.classList.toggle("no-usage", !isClaude());
+  document.body.classList.toggle("no-usage", !isChat());
+  drawUsage();
   const ext = current && current.ext;
   $("prompt").placeholder = ext && current.source === "cowork" ? "Alleen lezen — typ om een nieuw gesprek te starten"
     : ext && isClaude() ? "Ga verder…"
@@ -1557,12 +1606,16 @@ function initPick(sel) {
     if (sel.value !== v) { sel.value = v; label(); sel.dispatchEvent(new Event("change")); }
   };
   const open = () => {
-    list.replaceChildren(...[...sel.options].map((o) => {
+    list.replaceChildren(...[...sel.options].filter((o) => !o.hidden).map((o) => {
       const b = document.createElement("button");
       b.type = "button"; b.setAttribute("role", "option"); b.textContent = o.textContent;
       b.classList.toggle("on", o.value === sel.value); b.onclick = () => choose(o.value);
       return b;
     }));
+    const m = document.createElement("button");   // onderaan: modellen toevoegen, weghalen, inloggen
+    m.type = "button"; m.className = "manage"; m.textContent = "MODELLEN BEHEREN…";
+    m.onclick = () => { close(); setModels(true); };
+    list.append(m);
     list.classList.remove("hidden"); pick.classList.add("open"); btn.setAttribute("aria-expanded", "true");
     const r = btn.getBoundingClientRect(), h = list.offsetHeight;   // fixed: de zijbalk scrolt en zou de lijst afknippen
     list.style.left = r.left + "px"; list.style.width = r.width + "px";
@@ -1583,28 +1636,108 @@ function initPick(sel) {
   label();
 }
 
-// ChatGPT en Gemini: welk model je account nu biedt (Gemini Pro zodra je ermee ingelogd bent); ontbreekt de CLI, dan valt de keuze weg
-async function loadChatModels() {
-  let ms;
-  try { ms = await api().chat_models(); } catch { return; }
+/* --- MODELLEN: welke modellen in de keuzelijst staan, en per chatmodel installeren, inloggen en uitloggen --- */
+let prov = null;                  // status per chatmodel (uit providers.py), null tot die er is
+let localModels = null;           // lokale modellen met een checkpoint, null tot torch geladen is
+const busyProv = new Set();       // modellen waarvoor een installeer- of inlogvenster open staat
+let modelsOff = new Set();        // door jou verborgen
+try { modelsOff = new Set(JSON.parse(localStorage.getItem("hygra-models-off")) || []); } catch {}
+const MODEL_NAME = { claude: "Claude", gpt: "ChatGPT", gemini: "Gemini", qwen: "Qwen-NCM", ncm: "NCM 34M" };
+const usable = (m) => isChatModel(m) ? !prov || !!(prov[m] && prov[m].ready) : !localModels || localModels.includes(m);
+
+// verbergt in de keuzelijst wat je uitzette of wat (nog) niet werkt; staat het gekozen model daar niet meer in, dan het eerste dat wel kan
+function syncModels() {
+  const sel = $("model");
+  for (const o of sel.options) o.hidden = modelsOff.has(o.value) || !usable(o.value);
+  if (sel.selectedOptions[0] && sel.selectedOptions[0].hidden) {
+    const next = [...sel.options].find((o) => !o.hidden);
+    if (next) { sel.value = next.value; sel.dispatchEvent(new Event("change")); }
+  }
+  sel.nextElementSibling.querySelector(".pick-btn span").textContent = sel.selectedOptions[0]?.textContent || "";
+  if (!$("models").classList.contains("hidden")) renderModels();
+}
+
+async function loadProviders() {
+  try { prov = await api().providers(); } catch { return; }
+  busyProv.clear();
+  hasClaude = !!prov.claude.installed;
   for (const k of ["gpt", "gemini"]) {
     const o = [...$("model").options].find((x) => x.value === k);
-    if (!o) continue;
-    if (!ms[k]) { if ($("model").value === k) { $("model").value = "claude"; onModelChange(); } o.remove(); continue; }
-    o.textContent = ms[k].label; MODEL_LABEL[k] = ms[k].name;
+    if (o && prov[k].label) { o.textContent = prov[k].label; MODEL_LABEL[k] = prov[k].name; }
   }
+  syncModels();
   if (!current || !current.turns.length) renderAll();
+  refreshUi();
 }
+
+function modelState(m) {
+  if (!isChatModel(m)) return usable(m) ? ["Lokaal op je GPU · checkpoint aanwezig", true]
+    : ["Checkpoint ontbreekt in ckpt/ · zie de README (release v0.1)", false];
+  if (busyProv.has(m)) return ["Venster open: volg de stappen daar. Daarna werkt HyGra dit vanzelf bij.", false];
+  if (!prov) return ["Status ophalen…", false];
+  const p = prov[m];
+  if (!p.installed) return [p.cli + " is niet geïnstalleerd", false];
+  if (!p.ready) return ["Niet ingelogd" + (p.detail ? " · " + p.detail : ""), false];
+  return ["Ingelogd" + (p.account ? " · " + p.account : "") + (p.plan ? " · " + p.plan : "") + (p.model_name ? " · " + p.model_name : ""), true, p.warn];
+}
+
+function renderModels() {
+  $("model-rows").replaceChildren(...[...$("model").options].map((o) => {
+    const m = o.value, row = document.createElement("div"); row.className = "mrow";
+    row.append($(isChatModel(m) ? "t-avatar-" + m : "t-avatar-ncm").content.cloneNode(true));
+    const name = document.createElement("div"); name.className = "mname";
+    name.innerHTML = '<span></span><label class="chip" title="In de modelkeuze tonen"><input type="checkbox"> TOON</label>';
+    name.querySelector("span").textContent = MODEL_NAME[m] + (isChatModel(m) && prov && prov[m] && prov[m].cli ? " · " + prov[m].cli : isChatModel(m) ? "" : " · lokaal");
+    const box = name.querySelector("input");
+    box.checked = !modelsOff.has(m);
+    box.onchange = () => {
+      if (box.checked) modelsOff.delete(m); else modelsOff.add(m);
+      try { localStorage.setItem("hygra-models-off", JSON.stringify([...modelsOff])); } catch {}
+      syncModels();
+    };
+    const [text, ok, warn] = modelState(m);
+    const st = document.createElement("div"); st.className = "mstate" + (ok ? " ok" : ""); st.textContent = text;
+    if (warn) { const w = document.createElement("span"); w.className = "warn"; w.textContent = " · " + warn; st.append(w); }
+    const acts = document.createElement("div"); acts.className = "macts";
+    const btn = (label, what, quiet) => {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = label; b.disabled = busyProv.has(m);
+      if (quiet) b.classList.add("quiet");
+      b.onclick = () => { busyProv.add(m); renderModels(); api().provider_action(m, what).catch(() => { busyProv.delete(m); renderModels(); }); };
+      acts.append(b);
+    };
+    if (isChatModel(m) && prov && prov[m]) {
+      const p = prov[m];
+      if (!p.installed) btn("INSTALLEREN", "install");
+      else if (!p.ready) btn("INLOGGEN", "login");
+      else { btn("ANDER ACCOUNT", "login", true); btn("UITLOGGEN", "logout", true); }
+    }
+    row.append(name, st, acts);
+    return row;
+  }));
+}
+
+function setModels(open) {
+  $("models").classList.toggle("hidden", !open);
+  if (!open) return;
+  setPrefs(false); renderModels();
+  $("models-close").focus();
+  loadProviders();   // altijd vers: misschien heb je intussen in een terminal in- of uitgelogd
+}
+$("manage").onclick = () => setModels(true);
+$("models-close").onclick = () => setModels(false);
+$("models").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); setModels(false); } });
+document.addEventListener("mousedown", (e) => { if (!$("models").classList.contains("hidden") && !$("models").contains(e.target) && !e.target.closest(".pick-list")) setModels(false); });
 
 window.addEventListener("pywebviewready", async () => {
   $("boot-msg").textContent = "OPSTARTEN…";
   try {
     hasClaude = await api().has_claude();
     renderUsage(await api().limits(false));
+    for (const m of ["gpt", "gemini"]) api().limits(false, m).then((l) => renderUsage(l, m)).catch(() => {});
     resumeClaude();
     refreshUi();
     loadExternal();
-    loadChatModels();
+    loadProviders();
   } finally {   // ook bij een fout: het laadscherm mag nooit blijven hangen
     $("boot").classList.add("gone");
     setTimeout(() => $("boot").remove(), 400);
@@ -1612,7 +1745,7 @@ window.addEventListener("pywebviewready", async () => {
   try {   // torch en de NCM-modellen laden intussen op de achtergrond
     const info = await api().info();
     deviceName = info.device.replace("NVIDIA GeForce ", "").replace(" Laptop GPU", "").toUpperCase();
-    [...$("model").options].forEach((o) => { if (!isChatModel(o.value) && !info.models.includes(o.value)) o.remove(); });
+    localModels = info.models; syncModels();
   } catch {}
   onModelChange();
 });

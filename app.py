@@ -53,7 +53,7 @@ if __name__ == "__main__" and sys.platform == "win32":
 import bottle  # noqa: E402
 import webview  # noqa: E402
 
-from ncm import claude_chat, history, other_chat  # noqa: E402
+from ncm import claude_chat, history, other_chat, providers  # noqa: E402
 
 # pywebview sets no-cache on its files, but bottle's static_file overwrites those headers with its own, so
 # WebView2 cached index.html heuristically and kept showing an old page after an update
@@ -131,8 +131,18 @@ class Api:
     def has_claude(self):
         return claude_chat.available()
 
-    def limits(self, refresh=False):
+    def limits(self, refresh=False, model="claude"):
+        """Usage of the model's plan. Claude: {five_hour, seven_day}; ChatGPT / Gemini: {windows: [...]}."""
+        if model != "claude":
+            return other_chat.limits(model, refresh)
         return claude_chat.refresh_limits() if refresh else claude_chat.last_limits()
+
+    # ----- MODELLEN panel: installed? logged in as whom? and a console window to install, log in or log out
+    def providers(self):
+        return providers.status()
+
+    def provider_action(self, key, what):
+        return providers.action(key, what, lambda: self._js("providers"))
 
     def forget(self, session_id):
         claude_chat.forget(session_id)
@@ -184,13 +194,13 @@ class Api:
         return res
 
     # ----- ChatGPT (Codex CLI) and Gemini (Antigravity CLI), with the user's own free accounts
-    def chat_models(self):
-        return other_chat.models()
-
     def chat(self, kind, session, prompt, msg_id, cwd=None):
-        """A ChatGPT or Gemini reply, streamed like Claude's; returns the turn plus the model's conversation id."""
-        return self._stream(msg_id, lambda on_text: other_chat.run(
+        """A ChatGPT or Gemini reply, streamed like Claude's; returns the turn plus the model's conversation id.
+        Afterwards the plan's usage follows on its own (hygra.usage), so the reply does not wait for it."""
+        res = self._stream(msg_id, lambda on_text: other_chat.run(
             kind, msg_id, session, prompt, cwd, on_text, lambda s: self._js("status", msg_id, s)))
+        threading.Thread(target=lambda: self._js("usage", kind, other_chat.limits(kind, True)), daemon=True).start()
+        return res
 
     def _stream(self, msg_id, run):
         """Text goes to the page at most every 40 ms, and never sits in the buffer longer than that."""
