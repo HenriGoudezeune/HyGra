@@ -852,6 +852,8 @@ try { histSrc = localStorage.getItem("hygra-hist") || "all"; } catch {}
 const lanes = { gpu: null };
 const claudeJobs = new Map();   // bericht-id → job
 const allJobs = () => [...claudeJobs.values(), ...(lanes.gpu ? [lanes.gpu] : [])];
+// wat echt voor jou bezig is: een lokaal model dat op de achtergrond naar de GPU gaat terwijl je met een chatmodel praat, telt niet mee
+const shownJobs = () => allJobs().filter((j) => j.kind !== "load" || !isChat());
 const failed = new Set();
 let onGpu = null, clock = null;
 const laneOf = (model) => isChatModel(model) ? "claude" : "gpu";
@@ -1334,7 +1336,7 @@ function syncLoadCard() {
 
 // funky mode: zolang er iets bezig is, wisselt elk deel van de rand op zijn eigen tempo van kleur
 function syncFunky() {
-  const on = $("funky").checked && allJobs().length > 0;
+  const on = $("funky").checked && shownJobs().length > 0;
   document.body.classList.toggle("funky", on);
   document.body.classList.toggle("surfing", on && [...claudeJobs.values()].some((j) => j.model === "claude"));   // de vonk is van Claude
 }
@@ -1342,7 +1344,7 @@ function syncFunky() {
 // taakbalk: bewegende "bezig"-balk op de knop zolang Claude of de GPU iets doet
 let taskbarBusy = false;
 function syncTaskbar() {
-  const on = allJobs().length > 0;
+  const on = shownJobs().length > 0;
   if (on === taskbarBusy || !window.pywebview || !window.pywebview.api) return;
   taskbarBusy = on; window.pywebview.api.taskbar(on).catch(() => {});
 }
@@ -1366,7 +1368,7 @@ function refreshUi() {
     : failed.has($("model").value) ? "FOUT BIJ LADEN" : deviceName ? "KLAAR · " + deviceName : "OPSTARTEN";
   const others = [...claudeJobs.values()].filter((j) => j !== job).length;
   if (others) s += " · " + others + (others === 1 ? " GESPREK" : " GESPREKKEN") + " BEZIG";
-  if (lanes.gpu && lanes.gpu !== job) s += " · LOKAAL BEZIG";
+  if (lanes.gpu && lanes.gpu !== job && shownJobs().includes(lanes.gpu)) s += " · LOKAAL BEZIG";
   setStatus(s);
 }
 
