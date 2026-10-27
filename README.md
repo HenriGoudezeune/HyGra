@@ -16,6 +16,7 @@ HyGra (from *HydrarGyrum*, Hg, element 80) runs **Claude Opus 5.5** through Clau
 - **Replies survive closing the app.** A reply keeps running when you close HyGra and appears when you open it again.
 - **Talk while Claude works.** Type during a reply and Claude takes your message in mid-turn, as in Claude Code. Esc stops it.
 - **All your history in one list.** HyGra lists your Claude Code and Cowork sessions next to its own chats, with filters and search. You can continue Code sessions right in HyGra.
+- **ChatGPT and Gemini too.** Pick ChatGPT (through the [Codex](https://github.com/openai/codex) CLI, on a free ChatGPT account) or Gemini (through the Antigravity CLI, on your Google account; HyGra takes the best Gemini your account offers, Pro if you have it). Each chat keeps its own conversation per model, and a model you switch to gets the turns it missed as context. Usage bars, local-model settings and mid-turn messages only show where they belong.
 - **Remote Control.** Every chat is also a session in the Claude mobile app and on claude.ai/code while a reply runs.
 - **See what Claude does.** *Details* (Ctrl+O) opens each tool call to its input and output, and shows Claude's thinking.
 - **Readable replies.** Markdown, KaTeX math, code blocks that start collapsed, and file paths you can click to open.
@@ -62,6 +63,7 @@ uv run python app.py                # or start it from the Start menu
 
 - **Billing:** chats count toward your plan's normal usage limits. An `ANTHROPIC_API_KEY` in the environment is deliberately ignored, so HyGra never falls back to paid API billing.
 - **Full access:** each chat runs Claude Code with `--dangerously-skip-permissions`, as in your own terminal. Claude can read, change and run anything on your computer, so only use HyGra on your own machine.
+- **ChatGPT / Gemini:** optional. Install the Codex CLI (`npm i -g @openai/codex`, then `codex login`) and/or the Antigravity CLI (`agy`). They also run with full access.
 - **Local models:** the NCM models below need their checkpoints in `ckpt/`. Claude works without them.
 
 ## The experiment inside: Next-Concept Modeling on a laptop

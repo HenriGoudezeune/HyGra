@@ -275,6 +275,7 @@ nav .del.arm { background: var(--orange) !important; color: var(--olive-deep); }
 nav .del.arm svg { display: none; }
 /* gebruik van het Pro-abonnement */
 .usage { display: flex; flex-direction: column; gap: 12px; }
+body.no-usage .usage, body.no-usage .rail-use { display: none !important; }   /* het abonnementsgebruik is van Claude */
 .usage-head { display: flex; align-items: center; justify-content: space-between; min-height: 32px; }
 .usage-head .icon-btn { width: 36px; height: 36px; }
 .usage-head .icon-btn.spin svg { animation: spin 1s linear infinite; }
@@ -649,6 +650,8 @@ body.waifu.surfing .petals { display: block; }
       <label>MODEL
         <select id="model" class="hidden">
           <option value="claude">Claude Opus 5.5 · Pro</option>
+          <option value="gpt">ChatGPT · gratis</option>
+          <option value="gemini">Gemini · Google</option>
           <option value="qwen">Qwen-NCM · lokaal</option>
           <option value="ncm">NCM 34M · lokaal</option>
         </select>
@@ -757,6 +760,20 @@ body.waifu.surfing .petals { display: block; }
     <path d="M9 11 L18 20 M31 11 L22 20 M9 33 L18 24 M31 33 L22 24" stroke="#7FE0C8" stroke-width="3"/>
   </svg>
 </template>
+<template id="t-avatar-gpt">
+  <!-- ChatGPT: een hoekige zeshoekknoop -->
+  <svg class="avatar" width="40" height="44" viewBox="0 0 40 44" role="img" aria-label="ChatGPT">
+    <path d="M20 3 L36 12.5 L36 31.5 L20 41 L4 31.5 L4 12.5 Z" fill="none" stroke="#F4E4BC" stroke-width="3"/>
+    <path d="M12 15 L28 29 M28 15 L12 29 M20 9 L20 35" stroke="#F4E4BC" stroke-width="3"/>
+  </svg>
+</template>
+<template id="t-avatar-gemini">
+  <!-- Gemini: een vierpuntige ster met een uitgesneden kern -->
+  <svg class="avatar" width="40" height="44" viewBox="0 0 40 44" role="img" aria-label="Gemini">
+    <path d="M20 2 L25 17 L38 22 L25 27 L20 42 L15 27 L2 22 L15 17 Z" fill="#F2C14E"/>
+    <path d="M20 16 L26 22 L20 28 L14 22 Z" fill="#2E3714"/>
+  </svg>
+</template>
 <template id="t-avatar-ncm">
   <svg class="avatar" width="40" height="44" viewBox="0 0 40 44" role="img" aria-label="NCM">
     <path d="M20 2 L38 22 L20 42 L2 22 Z" fill="#FF7A1A"/>
@@ -792,7 +809,14 @@ body.waifu.surfing .petals { display: block; }
 const $ = (id) => document.getElementById(id);
 const COLORS = ["var(--orange)", "var(--orange)", "var(--mustard)", "var(--mustard)", "var(--mustard)", "var(--mint)", "var(--mint)", "var(--mint)", "var(--mint)"];
 const NAMES = ["1 code", "2", "4", "8", "16", "32", "48", "64", "64 codes"];
-const MODEL_LABEL = { claude: "CLAUDE OPUS 5.5", qwen: "QWEN-NCM", ncm: "NCM 34M" };
+const MODEL_LABEL = { claude: "CLAUDE OPUS 5.5", gpt: "CHATGPT", gemini: "GEMINI", qwen: "QWEN-NCM", ncm: "NCM 34M" };
+// chatmodellen (Markdown, tools, parallel per gesprek) tegenover de lokale NCM's; per model wat erbij hoort
+const CHAT = {
+  claude: { name: "Claude", ready: "KLAAR · CLAUDE PRO", cost: "via Pro, geen extra kost" },
+  gpt: { name: "ChatGPT", ready: "KLAAR · CHATGPT GRATIS", cost: "via je gratis ChatGPT-account" },
+  gemini: { name: "Gemini", ready: "KLAAR · GEMINI", cost: "via je Google-account" },
+};
+const isChatModel = (m) => m in CHAT;
 let chats = loadChats(), current = null, deviceName = "", hasClaude = true;
 // eerdere gesprekken uit Claude Code (terminal + Desktop) en Cowork, gelezen van deze laptop
 let external = null, histSrc = "all";
@@ -805,11 +829,13 @@ const claudeJobs = new Map();   // bericht-id → job
 const allJobs = () => [...claudeJobs.values(), ...(lanes.gpu ? [lanes.gpu] : [])];
 const failed = new Set();
 let onGpu = null, clock = null;
-const laneOf = (model) => model === "claude" ? "claude" : "gpu";
+const laneOf = (model) => isChatModel(model) ? "claude" : "gpu";
 
 function loadChats() { try { return JSON.parse(localStorage.getItem("hygra-chats")) || []; } catch { return []; } }
 // een lopend Claude-antwoord gaat mee als { running: id }: dat draait los van de app door en wordt bij de volgende start weer gevolgd
-const keepTurn = (t) => !t.pending ? t : t.pending.kind === "claude" ? { prompt: t.prompt, model: t.model, running: t.pending.id, t0: t.pending.t0 } : null;
+// ChatGPT en Gemini lopen in HyGra zelf: die vraag blijft staan, met de melding dat het antwoord afgebroken is
+const keepTurn = (t) => !t.pending ? t : t.pending.model === "claude" ? { prompt: t.prompt, model: t.model, running: t.pending.id, t0: t.pending.t0 }
+  : t.pending.kind === "claude" ? { prompt: t.prompt, model: t.model, error: "afgebroken: HyGra werd gesloten" } : null;
 function save() {
   const done = chats.slice(0, 40).map((c) => ({ ...c, turns: c.turns.map(keepTurn).filter(Boolean) }));
   try { localStorage.setItem("hygra-chats", JSON.stringify(done)); } catch {}
@@ -824,6 +850,7 @@ function api() {
 }
 function setStatus(text) { $("status-text").textContent = text; }
 function isClaude() { return $("model").value === "claude"; }
+function isChat() { return isChatModel($("model").value); }
 
 /* --- Markdown (marked, GFM) + LaTeX (KaTeX), daarna door DOMPurify --- */
 function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
@@ -1089,7 +1116,7 @@ function renderEmpty() {
   if (isClaude() && !hasClaude) return showNoClaude();
   const p = document.createElement("p"); p.className = "empty";
   const m = $("model").value;
-  p.innerHTML = "<b>" + MODEL_LABEL[m] + "</b>" + (m === "claude"
+  p.innerHTML = "<b>" + MODEL_LABEL[m] + "</b>" + (isChatModel(m)
     ? "Stel gerust je vraag."
     : "Experimenteel: schrijft Python verder, van grof naar fijn.");
   $("log").append(p);
@@ -1111,28 +1138,29 @@ function addMe(text) {
 
 function botNode(model) {
   const n = $("t-bot").content.firstElementChild.cloneNode(true);
-  n.querySelector(".av").replaceWith($(model === "claude" ? "t-avatar-claude" : "t-avatar-ncm").content.cloneNode(true));
-  if (model === "claude") n.querySelector(".bubble-bot").classList.add("claude");
+  n.querySelector(".av").replaceWith($(isChatModel(model) ? "t-avatar-" + model : "t-avatar-ncm").content.cloneNode(true));
+  if (isChatModel(model)) n.querySelector(".bubble-bot").classList.add("claude");   // .claude = de chatstijl
   return n;
 }
+const whatOf = (t) => isChatModel(t.model) ? t.label || MODEL_LABEL[t.model]
+  : MODEL_LABEL[t.model] + " · " + (t.chunks || 0) + " CHUNK" + (t.chunks === 1 ? "" : "S") + " · 9 STAPPEN ELK";
 
 function fillBot(n, t, cwd) {
   const body = n.querySelector(".body");
   if (t.error) { body.className = "body"; body.innerHTML = '<pre class="err"></pre>'; body.firstChild.textContent = "Fout: " + t.error; }
-  else if (t.model === "claude") { body.className = "body md"; body.innerHTML = markdown(t.text || (t.stopped ? "*Gestopt voor er tekst was.*" : "")); nestTools(body); linkFiles(body, cwd); }
+  else if (isChatModel(t.model)) { body.className = "body md"; body.innerHTML = markdown(t.text || (t.stopped ? "*Gestopt voor er tekst was.*" : "")); nestTools(body); linkFiles(body, cwd); }
   else { body.innerHTML = "<pre></pre>"; body.firstChild.textContent = t.completion || (t.stopped ? "(gestopt)" : "(niets gegenereerd)"); }
-  n.querySelector(".what").textContent = t.model === "claude" ? "CLAUDE OPUS 5.5"
-    : MODEL_LABEL[t.model] + " · " + (t.chunks || 0) + " CHUNK" + (t.chunks === 1 ? "" : "S") + " · 9 STAPPEN ELK";
-  n.querySelector(".copy").onclick = () => navigator.clipboard && navigator.clipboard.writeText(t.model === "claude" ? plainText(t.text || "") : t.prompt + (t.completion || ""));
+  n.querySelector(".what").textContent = whatOf(t);
+  n.querySelector(".copy").onclick = () => navigator.clipboard && navigator.clipboard.writeText(isChatModel(t.model) ? plainText(t.text || "") : t.prompt + (t.completion || ""));
   const foot = n.querySelector(".foot");
   foot.textContent = t.stopped ? "GESTOPT" + (t.seconds ? " · " + t.seconds.toFixed(1).replace(".", ",") + " s" : "")
     : t.imported ? "uit " + (current && current.source === "cowork" ? "Cowork" : "Claude Code")
-    : t.model === "claude" && !t.error
-    ? (t.tokens_in || 0).toLocaleString("nl-BE") + " → " + (t.tokens_out || 0).toLocaleString("nl-BE") + " tokens · via Pro, geen extra kost · " + (t.seconds || 0).toFixed(1).replace(".", ",") + " s"
+    : isChatModel(t.model) && !t.error
+    ? (t.tokens_in || 0).toLocaleString("nl-BE") + " → " + (t.tokens_out || 0).toLocaleString("nl-BE") + " tokens · " + CHAT[t.model].cost + " · " + (t.seconds || 0).toFixed(1).replace(".", ",") + " s"
     : "";
   const lv = n.querySelector(".levels"), view = n.querySelector(".level-view");
   lv.replaceChildren();
-  if (t.model !== "claude" && t.levels && t.levels.length && $("showlv").checked) {
+  if (!isChatModel(t.model) && t.levels && t.levels.length && $("showlv").checked) {
     const cap = document.createElement("span"); cap.className = "cap"; cap.textContent = "grof → fijn"; lv.append(cap);
     t.levels.forEach((txt, k) => {
       const b = document.createElement("button");
@@ -1154,8 +1182,8 @@ function fillBot(n, t, cwd) {
 
 const botCache = new WeakMap();   // beurt → getekende node: Markdown, KaTeX en links maar één keer per antwoord
 function addBot(t) {
-  let n = t.model === "claude" && !t.error ? botCache.get(t) : null;
-  if (!n) { n = botNode(t.model); fillBot(n, t, current && current.cwd); if (t.model === "claude" && !t.error) botCache.set(t, n); }
+  let n = isChatModel(t.model) && !t.error ? botCache.get(t) : null;
+  if (!n) { n = botNode(t.model); fillBot(n, t, current && current.cwd); if (isChatModel(t.model) && !t.error) botCache.set(t, n); }
   $("log").append(n); scrollDown();
 }
 // follow new text only when you are already at the bottom, so you can scroll up while Claude writes
@@ -1166,7 +1194,8 @@ function scrollDown(force = true) {
 
 // de echte spinner-woorden van Claude Code (uit claude.exe gehaald): één per antwoord, zoals in de terminal
 const CLAUDE_VERBS = ["Accomplishing", "Actioning", "Actualizing", "Architecting", "Baking", "Beaming", "Beboppin'", "Befuddling", "Billowing", "Blanching", "Bloviating", "Boogieing", "Boondoggling", "Booping", "Bootstrapping", "Brewing", "Bunning", "Burrowing", "Calculating", "Caramelizing", "Cascading", "Catapulting", "Cerebrating", "Channeling", "Choreographing", "Churning", "Clauding", "Coalescing", "Cogitating", "Combobulating", "Composing", "Computing", "Concocting", "Considering", "Contemplating", "Cooking", "Crafting", "Creating", "Crunching", "Crystallizing", "Cultivating", "Deciphering", "Deliberating", "Determining", "Dilly-dallying", "Discombobulating", "Doing", "Doodling", "Drizzling", "Ebbing", "Effecting", "Elucidating", "Embellishing", "Enchanting", "Envisioning", "Fermenting", "Fiddle-faddling", "Finagling", "Flambéing", "Flibbertigibbeting", "Flowing", "Flummoxing", "Fluttering", "Forging", "Forming", "Frolicking", "Frosting", "Gallivanting", "Galloping", "Garnishing", "Generating", "Gesticulating", "Germinating", "Gitifying", "Grooving", "Gusting", "Harmonizing", "Hashing", "Hatching", "Herding", "Honking", "Hullaballooing", "Hyperspacing", "Ideating", "Imagining", "Improvising", "Incubating", "Inferring", "Infusing", "Ionizing", "Jitterbugging", "Julienning", "Kerfuffling", "Kneading", "Leavening", "Levitating", "Lollygagging", "Manifesting", "Marinating", "Meandering", "Metamorphosing", "Misting", "Moonwalking", "Moseying", "Mulling", "Mustering", "Nebulizing", "Nesting", "Newspapering", "Noodling", "Nucleating", "Onioning", "Orbiting", "Orchestrating", "Osmosing", "Perambulating", "Percolating", "Perusing", "Philosophizing", "Photosynthesizing", "Polishing", "Pollinating", "Pondering", "Pontificating", "Pouncing", "Precipitating", "Prestidigitating", "Processing", "Proofing", "Propagating", "Puttering", "Puzzling", "Quantumizing", "Razzle-dazzling", "Razzmatazzing", "Recombobulating", "Reticulating", "Roosting", "Ruminating", "Sautéing", "Scampering", "Schlepping", "Scurrying", "Seasoning", "Shenaniganing", "Shimmying", "Simmering", "Skedaddling", "Sketching", "Slithering", "Smooshing", "Sock-hopping", "Spelunking", "Spinning", "Sprouting", "Stewing", "Sublimating", "Swirling", "Swooping", "Symbioting", "Synthesizing", "Tempering", "Thinking", "Thundering", "Tinkering", "Tomfoolering", "Topsy-turvying", "Transfiguring", "Transmogrifying", "Transmuting", "Twisting", "Undulating", "Unfurling", "Unraveling", "Vibing", "Waddling", "Wandering", "Warping", "Whatchamacalliting", "Whirlpooling", "Whirring", "Whisking", "Wibbling", "Working", "Wrangling", "Zesting", "Zigzagging"];
-const thinkWord = (j) => (j.verb ||= CLAUDE_VERBS[Math.floor(Math.random() * CLAUDE_VERBS.length)]).toUpperCase() + "…";
+const thinkWord = (j) => j.model !== "claude" ? "DENKT NA"
+  : (j.verb ||= CLAUDE_VERBS[Math.floor(Math.random() * CLAUDE_VERBS.length)]).toUpperCase() + "…";
 
 /* --- lopend werk: per baan (Claude / GPU) één taak, en je kan intussen vrij wisselen --- */
 const fmtTime = (j) => ((Date.now() - j.start) / 1000).toFixed(1).replace(".", ",") + " s";
@@ -1189,7 +1218,7 @@ function endJob(job) {
 }
 // de taak die bij wat je nu ziet hoort: het Claude-antwoord van dit gesprek, of de GPU bij een lokaal model
 function viewJob() {
-  if (!isClaude()) return lanes.gpu;
+  if (!isChat()) return lanes.gpu;
   const t = current && current.turns.find((x) => x.pending && x.pending.kind === "claude");
   return t ? t.pending : null;
 }
@@ -1253,7 +1282,7 @@ function busyCard(kind) {
 function syncLoadCard() {
   const j = lanes.gpu;
   if (!j || j.kind !== "load") return;
-  if (isClaude()) j.node.remove();
+  if (isChat()) j.node.remove();
   else if (!j.node.isConnected) { $("log").append(j.node); scrollDown(); }
 }
 
@@ -1261,7 +1290,7 @@ function syncLoadCard() {
 function syncFunky() {
   const on = $("funky").checked && allJobs().length > 0;
   document.body.classList.toggle("funky", on);
-  document.body.classList.toggle("surfing", on && claudeJobs.size > 0);
+  document.body.classList.toggle("surfing", on && [...claudeJobs.values()].some((j) => j.model === "claude"));   // de vonk is van Claude
 }
 
 // taakbalk: bewegende "bezig"-balk op de knop zolang Claude of de GPU iets doet
@@ -1276,7 +1305,7 @@ function refreshUi() {
   syncFunky();
   syncTaskbar();
   const job = viewJob(), canStop = !!job && job.kind !== "load";   // tijdens het laden van een model: enkel wachten
-  const between = canStop && job.kind === "claude" && !job.stopping && !!$("prompt").value.trim();   // tekst getypt: tussendoor sturen
+  const between = canStop && job.model === "claude" && !job.stopping && !!$("prompt").value.trim();   // tekst getypt: tussendoor sturen
   const send = $("send");
   send.disabled = !!job && (!canStop || !!job.stopping);
   send.querySelector(".i-send").style.display = job && !between ? "none" : "";
@@ -1287,6 +1316,7 @@ function refreshUi() {
   $("status").classList.toggle("busy-pill", !!job);
   let s = job ? job.state
     : isClaude() ? (hasClaude ? "KLAAR · CLAUDE PRO" : "CLAUDE CODE ONTBREEKT")
+    : isChat() ? CHAT[$("model").value].ready
     : failed.has($("model").value) ? "FOUT BIJ LADEN" : deviceName ? "KLAAR · " + deviceName : "OPSTARTEN";
   const others = [...claudeJobs.values()].filter((j) => j !== job).length;
   if (others) s += " · " + others + (others === 1 ? " GESPREK" : " GESPREKKEN") + " BEZIG";
@@ -1375,7 +1405,7 @@ async function send(e) {
   const prompt = $("prompt").value, model = $("model").value;
   const busy = viewJob();
   if (busy) {
-    if (busy.kind === "claude" && prompt.trim()) { if (!busy.stopping) { $("prompt").value = ""; steer(busy, prompt); refreshUi(); } }
+    if (busy.model === "claude" && prompt.trim()) { if (!busy.stopping) { $("prompt").value = ""; steer(busy, prompt); refreshUi(); } }
     else if (e.type === "submit") stopJob(busy);   // zonder tekst is de knop een stopknop; Enter doet dan niets
     return;
   }
@@ -1390,8 +1420,10 @@ async function send(e) {
 async function ask(chat, prompt, model) {
   const lane = laneOf(model);
   chat.updated = Date.now();
-  const turn = { prompt, model }, t0 = Date.now();
-  const job = model === "claude" ? claudeJob(chat, turn, "m" + t0, t0) : { kind: "write", id: "g" + t0, model, chat, turn, t0, state: "BEZIG", node: busyCard("write") };
+  const turn = { prompt, model, ...(isChatModel(model) && { label: MODEL_LABEL[model] }) }, t0 = Date.now();
+  const job = isChatModel(model) ? claudeJob(chat, turn, (model === "claude" ? "m" : "x") + t0, t0, model)
+    : { kind: "write", id: "g" + t0, model, chat, turn, t0, state: "BEZIG", node: busyCard("write") };
+  const recap = isChatModel(model) ? recapFor(chat, model) : "";
   turn.pending = job; chat.turns.push(turn);
   startJob(job);
   if (chat === current) renderAll(); else renderHistory();
@@ -1402,7 +1434,13 @@ async function ask(chat, prompt, model) {
       const first = !chat.claudeSession;
       if (first) chat.claudeSession = await api().claude_spare().catch(() => newSessionId());
       if (chats.includes(chat)) save();   // het lopende antwoord overleeft zo het sluiten van de app
-      r = await api().claude(chat.claudeSession, first, prompt, job.id, chat.cwd || null);
+      r = await api().claude(chat.claudeSession, first, recap + prompt, job.id, chat.cwd || null);
+    } else if (isChatModel(model)) {
+      // ChatGPT en Gemini: elk hun eigen gesprek per HyGra-gesprek (Codex-thread / Antigravity-conversatie)
+      const sessions = chat.sessions ||= {};
+      r = await api().chat(model, sessions[model] || null, recap + prompt, job.id, chat.cwd || null);
+      if (r.session) sessions[model] = r.session;
+      delete r.session;
     } else {
       r = await api().complete(prompt, model, +$("temp").value, +$("chunks").value, job.id);
       if (!r.error) { onGpu = model; failed.delete(model); }
@@ -1413,11 +1451,22 @@ async function ask(chat, prompt, model) {
   if (lane === "gpu") warm();
 }
 
-function claudeJob(chat, turn, id, t0) {
-  const job = { kind: "claude", id, model: "claude", chat, turn, t0, text: "" };
+// wisselde je binnen een gesprek van model, dan krijgt het nieuwe model de beurten die het zelf niet zag mee als context
+function recapFor(chat, model) {
+  let i = chat.turns.length - 1;
+  while (i >= 0 && chat.turns[i].model !== model) i--;
+  const missed = chat.turns.slice(i + 1).filter((t) => !t.pending && !t.error && (t.text || t.completion));
+  if (!missed.length) return "";
+  return "[Eerder in dit gesprek, met andere modellen:]\n\n" + missed.map((t) => "Gebruiker: " + t.prompt + "\n\n"
+    + (MODEL_LABEL[t.model] || t.model) + ": " + (isChatModel(t.model) ? plainText(t.text || "") : t.prompt + t.completion)).join("\n\n---\n\n")
+    + "\n\n[Nu mijn nieuwe bericht:]\n\n";
+}
+
+function claudeJob(chat, turn, id, t0, model = "claude") {
+  const job = { kind: "claude", id, model, chat, turn, t0, text: "" };
   job.state = thinkWord(job);
-  job.node = botNode("claude");
-  job.node.querySelector(".what").textContent = "CLAUDE OPUS 5.5";
+  job.node = botNode(model);
+  job.node.querySelector(".what").textContent = MODEL_LABEL[model];
   job.body = job.node.querySelector(".body"); job.body.className = "body md"; job.body.innerHTML = '<span class="caret"></span>';
   job.foot = job.node.querySelector(".foot");
   return job;
@@ -1427,7 +1476,7 @@ function claudeJob(chat, turn, id, t0) {
 async function settle(job, r) {
   const { chat, turn } = job;
   if (job.kind === "claude") {
-    if ((r.error || r.stopped) && chat.claudeSession && !(await api().has_session(chat.claudeSession).catch(() => true))) delete chat.claudeSession;   // de sessie is nooit gestart
+    if (job.model === "claude" && (r.error || r.stopped) && chat.claudeSession && !(await api().has_session(chat.claudeSession).catch(() => true))) delete chat.claudeSession;   // de sessie is nooit gestart
     if (r.stopped) r.text = job.text;   // wat er al stond, blijft staan
   }
   delete turn.pending;
@@ -1449,7 +1498,7 @@ async function settle(job, r) {
   }
   if (chats.includes(chat)) { save(); renderHistory(); }
   if (job.kind === "claude") {
-    api().claude_done(job.id).catch(() => {});   // bewaard: de jobmap mag weg
+    if (job.model === "claude") api().claude_done(job.id).catch(() => {});   // bewaard: de jobmap mag weg
     job.settled = true; job.queued = []; drawQueue(job);
     if (r.stopped || r.error) putBack(job, job.after || []); else sendAfter(job);
   }
@@ -1469,18 +1518,21 @@ function resumeClaude() {
 }
 
 function applyModel() {
-  $("local-opts").classList.toggle("hidden", isClaude());
+  // per model enkel wat erbij hoort: het Claude-gebruik bij Claude, temperatuur en lengte bij de lokale modellen
+  $("local-opts").classList.toggle("hidden", isChat());
+  document.body.classList.toggle("no-usage", !isClaude());
   const ext = current && current.ext;
   $("prompt").placeholder = ext && current.source === "cowork" ? "Alleen lezen — typ om een nieuw gesprek te starten"
     : ext && isClaude() ? "Ga verder…"
-    : isClaude() ? "Vraag Claude iets…"
+    : ext && isChat() ? "Typ om een nieuw gesprek te starten"
+    : isChat() ? "Vraag " + CHAT[$("model").value].name + " iets…"
     : "Begin van een functie…";
 }
 
 // zorgt dat het gekozen lokale model op de GPU staat; is de GPU bezig, dan volgt het daarna
 async function warm() {
   const model = $("model").value;
-  if (isClaude() || onGpu === model || failed.has(model) || lanes.gpu) return;
+  if (isChat() || onGpu === model || failed.has(model) || lanes.gpu) return;
   const job = { kind: "load", model, state: "MODEL LADEN", node: busyCard("load") };
   startJob(job); syncLoadCard();
   try { await api().warmup(model); onGpu = model; } catch (err) { failed.add(model); }
@@ -1527,8 +1579,21 @@ function initPick(sel) {
   document.addEventListener("mousedown", (e) => { if (isOpen() && !pick.contains(e.target)) close(); });
   document.addEventListener("scroll", (e) => { if (isOpen() && e.target.contains?.(pick)) close(); }, true);   // enkel als de knop zelf verschuift
   window.addEventListener("resize", close);
-  new MutationObserver(label).observe(sel, { childList: true });   // opties verdwijnen als een model ontbreekt
+  new MutationObserver(label).observe(sel, { childList: true, subtree: true, characterData: true });   // opties verdwijnen als een model ontbreekt
   label();
+}
+
+// ChatGPT en Gemini: welk model je account nu biedt (Gemini Pro zodra je ermee ingelogd bent); ontbreekt de CLI, dan valt de keuze weg
+async function loadChatModels() {
+  let ms;
+  try { ms = await api().chat_models(); } catch { return; }
+  for (const k of ["gpt", "gemini"]) {
+    const o = [...$("model").options].find((x) => x.value === k);
+    if (!o) continue;
+    if (!ms[k]) { if ($("model").value === k) { $("model").value = "claude"; onModelChange(); } o.remove(); continue; }
+    o.textContent = ms[k].label; MODEL_LABEL[k] = ms[k].name;
+  }
+  if (!current || !current.turns.length) renderAll();
 }
 
 window.addEventListener("pywebviewready", async () => {
@@ -1539,6 +1604,7 @@ window.addEventListener("pywebviewready", async () => {
     resumeClaude();
     refreshUi();
     loadExternal();
+    loadChatModels();
   } finally {   // ook bij een fout: het laadscherm mag nooit blijven hangen
     $("boot").classList.add("gone");
     setTimeout(() => $("boot").remove(), 400);
@@ -1546,7 +1612,7 @@ window.addEventListener("pywebviewready", async () => {
   try {   // torch en de NCM-modellen laden intussen op de achtergrond
     const info = await api().info();
     deviceName = info.device.replace("NVIDIA GeForce ", "").replace(" Laptop GPU", "").toUpperCase();
-    [...$("model").options].forEach((o) => { if (o.value !== "claude" && !info.models.includes(o.value)) o.remove(); });
+    [...$("model").options].forEach((o) => { if (!isChatModel(o.value) && !info.models.includes(o.value)) o.remove(); });
   } catch {}
   onModelChange();
 });

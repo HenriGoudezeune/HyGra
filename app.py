@@ -4,6 +4,7 @@ shortcut from install_shortcut.py).
 A native window (pywebview, Edge WebView2) around web/index.html; the page calls Python
 directly through `window.pywebview.api`. Two kinds of partner:
 - Claude Opus 5.5 through Claude Code and the user's Claude subscription: a real chat.
+  ChatGPT (Codex CLI) and Gemini (Antigravity CLI) chat the same way, on his own free accounts.
 - the local NCM models: code completers that write the next chunks coarse-to-fine.
   Only one of them sits on the GPU at a time (4 GB).
 """
@@ -52,7 +53,7 @@ if __name__ == "__main__" and sys.platform == "win32":
 import bottle  # noqa: E402
 import webview  # noqa: E402
 
-from ncm import claude_chat, history  # noqa: E402
+from ncm import claude_chat, history, other_chat  # noqa: E402
 
 # pywebview sets no-cache on its files, but bottle's static_file overwrites those headers with its own, so
 # WebView2 cached index.html heuristically and kept showing an old page after an update
@@ -174,8 +175,25 @@ class Api:
             self._window.evaluate_js(f"hygra.{fn}({', '.join(json.dumps(a) for a in args)})")
 
     def claude_attach(self, msg_id):
-        """Follows a reply that is running (or finished) as a job, from the start of its output.
-        Text goes to the page at most every 40 ms, and never sits in the buffer longer than that."""
+        """Follows a reply that is running (or finished) as a job, from the start of its output."""
+        res = self._stream(msg_id, lambda on_text: claude_chat.follow(
+            msg_id, on_text, lambda s: self._js("status", msg_id, s), lambda late: self._js("late", msg_id, late)))
+        if msg_id in self._stopped:
+            self._stopped.discard(msg_id)
+            return {"stopped": True, "limits": res.get("limits")}
+        return res
+
+    # ----- ChatGPT (Codex CLI) and Gemini (Antigravity CLI), with the user's own free accounts
+    def chat_models(self):
+        return other_chat.models()
+
+    def chat(self, kind, session, prompt, msg_id, cwd=None):
+        """A ChatGPT or Gemini reply, streamed like Claude's; returns the turn plus the model's conversation id."""
+        return self._stream(msg_id, lambda on_text: other_chat.run(
+            kind, msg_id, session, prompt, cwd, on_text, lambda s: self._js("status", msg_id, s)))
+
+    def _stream(self, msg_id, run):
+        """Text goes to the page at most every 40 ms, and never sits in the buffer longer than that."""
         buf, lock, live = [], threading.Lock(), threading.Event()
 
         def flush():
@@ -195,21 +213,19 @@ class Api:
 
         threading.Thread(target=pump, daemon=True).start()
         try:
-            res = claude_chat.follow(msg_id, on_text, lambda s: self._js("status", msg_id, s),
-                                     lambda late: self._js("late", msg_id, late))
+            return run(on_text)
         finally:
             live.set()
             flush()
-        if msg_id in self._stopped:
-            self._stopped.discard(msg_id)
-            return {"stopped": True, "limits": res.get("limits")}
-        return res
 
     def has_session(self, session_id):
         return claude_chat.session_exists(session_id)
 
     def stop(self, msg_id):
         """Stop button: ends that Claude reply, or the local completion that is running."""
+        if msg_id.startswith("x"):   # ChatGPT / Gemini
+            other_chat.stop_reply(msg_id)
+            return True
         self._stopped.add(msg_id)
         if msg_id.startswith("m"):
             claude_chat.stop_job(msg_id)
