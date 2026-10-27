@@ -21,26 +21,47 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 os.chdir(ROOT)
 sys.path.insert(0, ROOT)
 
-import torch  # noqa: E402
 import webview  # noqa: E402
 
-from eval_code import cut_function, load, load_decoder, next_chunk  # noqa: E402
 from ncm import claude_chat, history  # noqa: E402
-from ncm.data import get_encoder  # noqa: E402
+
+# torch and the NCM code take ~4 s to import; Api._boot loads them while the window shows its loading screen
+torch = cut_function = load = load_decoder = next_chunk = None
 
 MODELS = {"qwen": "ckpt/generator_qwen.pt", "ncm": "ckpt/generator.pt"}
 
 
 class Api:
     def __init__(self):
-        self.dev = "cuda" if torch.cuda.is_available() else "cpu"
-        self.enc = get_encoder("data")
+        self.dev = "cpu"
+        self.enc = None
         self.lock = threading.Lock()
         self.m = {}
         self._window = None
         self._hwnd = None
+        self._ready = threading.Event()
+        self._booting = False
+
+    def _start_boot(self):
+        """Called once the page (with its loading screen) is on screen: importing torch holds the GIL,
+        so starting it earlier would only delay the window itself."""
+        if not self._booting:
+            self._booting = True
+            threading.Thread(target=self._boot, daemon=True).start()
+
+    def _boot(self):
+        global torch, cut_function, load, load_decoder, next_chunk
+        try:
+            import torch
+            from eval_code import cut_function, load, load_decoder, next_chunk
+            from ncm.data import get_encoder
+            self.dev = "cuda" if torch.cuda.is_available() else "cpu"
+            self.enc = get_encoder("data")
+        finally:   # never leave the page waiting; a failure then shows up as an error in info()
+            self._ready.set()
 
     def _use(self, name):
+        self._ready.wait()
         if self.m.get("name") == name:
             return
         self.m = {}
@@ -50,6 +71,7 @@ class Api:
         self.m = {"name": name, "vq": vq, "gen": gen, "dec": load_decoder("ckpt/decoder_ctx.pt", vq, self.dev)}
 
     def info(self):
+        self._ready.wait()   # the page keeps its loading screen up until this returns
         gpu = torch.cuda.get_device_name(0) if self.dev == "cuda" else "CPU"
         return {"device": gpu, "models": [k for k, v in MODELS.items() if os.path.exists(v)]}
 
@@ -122,13 +144,13 @@ class Api:
             self._use(model)
         return True
 
-    @torch.no_grad()
     def complete(self, prompt, model, temperature, chunks):
+        self._ready.wait()
         try:
             if model not in MODELS:
                 raise ValueError("onbekend model")
             chunks = max(1, min(4, int(chunks)))
-            with self.lock:
+            with self.lock, torch.no_grad():
                 self._use(model)
                 vq, gen, dec, enc = self.m["vq"], self.m["gen"], self.m["dec"], self.enc
                 context, out, levels = enc.encode_ordinary(prompt), [], []
@@ -228,6 +250,7 @@ if __name__ == "__main__":
     if sys.platform == "win32":
         api._window.events.shown += lambda: set_icon(api._window)
         api._window.events.shown += lambda: setattr(api, "_hwnd", api._window.native.Handle.ToInt64() or None)
+    api._window.events.loaded += api._start_boot
     # not private: localStorage (funky mode, filters, ...) must survive a restart
     webview.start(private_mode=False,
                   storage_path=os.path.join(os.environ.get("LOCALAPPDATA", ROOT), "HyGra", "webview"))
