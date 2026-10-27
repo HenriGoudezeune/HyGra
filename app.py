@@ -38,12 +38,15 @@ def log(msg):
 
 
 log("start")
+# --background (for tests): no splash, the window never takes focus and opens under all other windows
+BACKGROUND = "--background" in sys.argv
 splash = None
 if __name__ == "__main__" and sys.platform == "win32":
     # before anything heavy: own taskbar group + icon instead of Python's, and the loading screen at once
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("hydrargyrum.hygra")
-    from ncm.splash import Splash
-    splash = Splash(ROOT, *SIZE)
+    if not BACKGROUND:
+        from ncm.splash import Splash
+        splash = Splash(ROOT, *SIZE)
 
 import webview  # noqa: E402
 
@@ -366,7 +369,12 @@ def reveal(window, api):
         splash.cover()
         if rect:
             ctypes.windll.user32.SetWindowPos(window.native.Handle.ToInt64(), None, *rect, 0x4 | 0x10)   # NOZORDER|NOACTIVATE
-    window.show()
+    if BACKGROUND:   # pywebview's show() also calls Activate(); show it behind everything instead
+        hwnd = window.native.Handle.ToInt64()
+        ctypes.windll.user32.ShowWindow(hwnd, 4)   # SW_SHOWNOACTIVATE
+        ctypes.windll.user32.SetWindowPos(hwnd, 1, 0, 0, 0, 0, 0x1 | 0x2 | 0x10)   # HWND_BOTTOM, NOSIZE|NOMOVE|NOACTIVATE
+    else:
+        window.show()
     if splash:
         time.sleep(0.3)
         splash.close()
@@ -378,7 +386,8 @@ if __name__ == "__main__":
     api = Api()
     api._window = webview.create_window("HyGra", os.path.join(ROOT, "web", "index.html"), js_api=api,
                                        width=SIZE[0], height=SIZE[1], min_size=(420, 600),
-                                       background_color="#3B461C", hidden=splash is not None)
+                                       background_color="#3B461C", hidden=splash is not None or BACKGROUND,
+                                       focus=not BACKGROUND)
     if sys.platform == "win32":
         api._window.events.shown += lambda: set_icon(api._window)
         api._window.events.shown += lambda: setattr(api, "_hwnd", api._window.native.Handle.ToInt64() or None)
