@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="vendor/katex/katex.min.css">
 <link rel="stylesheet" href="vendor/fonts/fonts.css">
 <link rel="stylesheet" href="vendor/fonts/rajdhani.css">
+<link rel="stylesheet" href="vendor/fonts/mplusrounded.css">
 <style>
 :root {
   --olive: #3B461C; --olive-deep: #2E3714; --olive-soft: #4A5724; --olive-line: #55602E;
@@ -363,11 +364,11 @@ body.funky .hist-src button.on, body.funky label.chip:has(input:checked) { borde
 /* instellingen: paneel naast de knop bij het logo */
 .brand .prefs-btn { margin-left: auto; }
 .brand .prefs-btn + .side-btn { margin-left: 0; }
-.prefs { position: fixed; z-index: 60; width: 300px; display: flex; flex-direction: column; gap: 12px; padding: 16px;
+.prefs { position: fixed; z-index: 60; width: 340px; display: flex; flex-direction: column; gap: 12px; padding: 16px;
   background: var(--olive-deep); border: 4px solid var(--orange); box-shadow: 6px 6px 0 rgba(0,0,0,.35); }
 .seg { display: flex; border: 3px solid var(--olive-line); }
 .seg label { flex: 1 1 0; display: flex; align-items: center; justify-content: center; min-height: 40px; cursor: pointer;
-  font-size: 13px; font-weight: 600; letter-spacing: 1px; color: var(--text-mute); }
+  font-size: 12px; font-weight: 600; letter-spacing: .5px; color: var(--text-mute); }
 .seg label:hover { color: var(--text); }
 .seg label:has(input:checked) { background: var(--orange); color: var(--olive-deep); }
 .seg label:has(input:focus-visible) { outline: 3px solid var(--mint); outline-offset: 2px; }
@@ -427,10 +428,136 @@ body.cyber ::-webkit-scrollbar { width: 10px; height: 10px; }
 body.cyber ::-webkit-scrollbar-thumb { border-width: 3px; }
 body.cyber .app::after { content: ""; position: fixed; inset: 0; z-index: 40; pointer-events: none;
   background: repeating-linear-gradient(0deg, rgba(0,240,255,.03) 0 1px, transparent 1px 3px); }
+
+/* thema WAIFU, naar de Doki Theme en anime-interfaces: licht sakura-pastel, alles rond, hartjes en bloemetjes,
+   een volwassen anime-figuur rechts in het gesprek; elke figuur kleurt de accenten mee */
+body.waifu {
+  --olive: #FFF4F8; --olive-deep: #FFFFFF; --olive-soft: #FCE4EF; --olive-line: #F3C6DA;
+  --orange: #D6418C; --mustard: #8E5BD8; --mint: #177E93;
+  --text: #4A2B3F; --text-dim: #6E4D62; --text-mute: #85677C;
+  --line: 3px; --glow: rgba(214, 65, 140, .22);
+  font-family: 'M PLUS Rounded 1c', system-ui, sans-serif; font-weight: 500;
+}
+/* per figuur (enkel binnen de app: #boot blijft gelijk aan de splash) */
+body.waifu[data-waifu="tohru"] :is(.app, .prefs) { --orange: #D94F6B; --mustard: #A85A12; --glow: rgba(217, 79, 107, .22); }
+body.waifu[data-waifu="misato"] :is(.app, .prefs) { --orange: #B8344F; --mustard: #6B3FA0; --glow: rgba(107, 63, 160, .22); }
+body.waifu[data-waifu="ishtar"] :is(.app, .prefs) { --orange: #B83232; --mustard: #7D6310; --glow: rgba(184, 50, 50, .2); }
+body.waifu[data-waifu="darkness"] :is(.app, .prefs) { --orange: #B8650F; --mustard: #7A5200; --glow: rgba(184, 101, 15, .22); }
+body.waifu[data-waifu="echidna"] :is(.app, .prefs) { --orange: #7E57C2; --mustard: #586683; --glow: rgba(126, 87, 194, .22); }
+body.waifu svg text { font-family: 'M PLUS Rounded 1c', sans-serif; font-weight: 800; }
+body.waifu #boot .bname { font-weight: 800; }
+body.waifu [stroke="#FF7A1A" i] { stroke: var(--orange); } body.waifu [fill="#FF7A1A" i] { fill: var(--orange); }
+body.waifu [stroke="#F2C14E" i] { stroke: var(--mustard); } body.waifu [fill="#F2C14E" i] { fill: var(--mustard); }
+body.waifu [stroke="#7FE0C8" i] { stroke: var(--mint); } body.waifu [fill="#7FE0C8" i] { fill: var(--mint); }
+body.waifu [stroke="#2E3714" i] { stroke: var(--olive-deep); } body.waifu [fill="#2E3714" i] { fill: var(--olive-deep); }
+body.waifu [fill="#F4E4BC" i] { fill: var(--text); }
+/* round shapes instead of cut corners */
+body.waifu .app :is(.cut, .cut-sm) { clip-path: none; border-radius: 18px; }
+body.waifu .app .cut-in { clip-path: none; border-radius: 15px; }
+body.waifu .app { border: 0; }
+body.waifu aside { background: linear-gradient(180deg, #FFFFFF, #FFEAF3); border-right: 2px solid var(--olive-line); }
+body.waifu main { position: relative; background: radial-gradient(circle, rgba(214, 65, 140, .09) 1.5px, transparent 2px) 0 0 / 22px 22px, var(--olive); }
+body.waifu header { border-bottom: 2px solid var(--olive-line); background: rgba(255, 255, 255, .7); }
+body.waifu form { border-top: 2px solid var(--olive-line); background: rgba(255, 255, 255, .7); }
+body.waifu header, body.waifu #log, body.waifu form { position: relative; z-index: 1; }
+body.waifu h1 { font-weight: 800; }
+body.waifu h1::before { content: "✿ "; color: var(--orange); }
+body.waifu .brand b { font-weight: 800; }
+body.waifu .label::after { content: " ♡"; color: var(--orange); }
+body.waifu .settings { border-top: 2px solid var(--olive-line); }
+body.waifu .new { border-radius: 999px; font-weight: 800; }
+body.waifu .app .cut-sm:has(.new) { border-radius: 999px; box-shadow: 0 6px 16px var(--glow); }
+body.waifu .new:hover, body.waifu .send:hover { background: var(--mustard); }
+body.waifu nav button { border-left: 0; border-radius: 12px; }
+body.waifu nav button.on { background: var(--olive-soft); color: var(--text); font-weight: 700; }
+body.waifu nav button:hover { background: rgba(252, 228, 239, .7); }
+body.waifu nav .src { border-radius: 999px; padding: 1px 7px; color: #FFFFFF; }
+body.waifu nav .del { border-radius: 12px; }
+body.waifu :is(.pick-btn, select, .hist-find, label.chip) { border-width: 2px; border-radius: 12px; }
+body.waifu .pick-list { border-width: 2px; border-radius: 16px; box-shadow: 0 10px 28px var(--glow); }
+body.waifu .pick-list button { border-left: 0; border-radius: 10px; }
+body.waifu .pick-list button.on { background: var(--olive-soft); }
+body.waifu .hist-src { border-bottom-width: 2px; }
+body.waifu .hist-src button { border-radius: 10px 10px 0 0; }
+body.waifu .prefs { border-width: 2px; border-radius: 20px; box-shadow: 0 12px 32px var(--glow); }
+body.waifu .seg { border-width: 2px; border-radius: 999px; padding: 3px; gap: 3px; }
+body.waifu .seg label { border-radius: 999px; }
+body.waifu .seg label:has(input:checked) { color: #FFFFFF; }
+body.waifu .ubar .track, body.waifu .rail-use .track { clip-path: none; border-radius: 999px; overflow: hidden; }
+body.waifu .ubar .track i { border-radius: 999px; }
+body.waifu .status.busy-pill { border-radius: 999px; color: #FFFFFF; }
+body.waifu .status.busy-pill svg path { fill: #FFFFFF; }
+/* bubbles: soft gradient frames, a tail corner, a pink glow */
+body.waifu .bubble-me { padding: 0; border-radius: 22px 22px 6px 22px; background: linear-gradient(135deg, var(--orange), var(--mustard)); box-shadow: 0 8px 20px var(--glow); }
+body.waifu .bubble-me > div { background: transparent; color: #FFFFFF; }
+body.waifu :is(.bubble-bot, .busy) { padding: 2px; border-radius: 22px 22px 22px 6px; background: linear-gradient(135deg, var(--orange), var(--mustard)); box-shadow: 0 8px 22px var(--glow); }
+body.waifu .bubble-bot.claude { background: linear-gradient(135deg, var(--mint), var(--mustard)); }
+body.waifu :is(.bubble-bot, .busy) > div { border-radius: 20px 20px 20px 4px; background: #FFFFFF; }
+body.waifu .field { padding: 2px; background: linear-gradient(135deg, var(--orange), var(--mustard)); box-shadow: 0 6px 16px var(--glow); }
+body.waifu textarea { background: #FFFFFF; }
+body.waifu .send { border-radius: 22px; box-shadow: 0 6px 16px var(--glow); }
+body.waifu .md :is(pre, details.code) { background: #FFF6FA; border: 2px solid var(--olive-line); border-radius: 12px; }
+body.waifu .md details.code pre { border: 0; }
+body.waifu .md .tool-more pre { background: #FFF6FA; border-radius: 8px; }
+body.waifu .md :is(div.tool, details.tool, .think, .me-mid, blockquote) { border-radius: 0 12px 12px 0; }
+body.waifu .md code { border-radius: 6px; }
+body.waifu .md :is(strong, .katex) { color: #2E1526; }
+body.waifu .md ul > li::marker { content: "♡  "; color: var(--orange); }
+body.waifu .md hr { height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--orange), var(--mustard), transparent); }
+body.waifu .md th { color: var(--text); }
+body.waifu .empty b { font-weight: 800; background: linear-gradient(90deg, var(--orange), var(--mustard)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+body.waifu :is(.keycard, .keycard > div, .level-view) { border-radius: 18px; }
+body.waifu ::-webkit-scrollbar-track, body.waifu ::-webkit-scrollbar-corner { background: transparent; }
+body.waifu ::-webkit-scrollbar-thumb { background: var(--olive-line); border: 4px solid transparent; background-clip: padding-box; border-radius: 999px; }
+body.waifu ::-webkit-scrollbar-thumb:hover { background: var(--orange); background-clip: padding-box; }
+body.waifu ::selection { background: #FFC3DD; color: var(--text); }
+/* the character: big, bottom right in the chat, floating gently; messages sit on top in their own frames */
+.waifu-art { display: none; }
+body.waifu .waifu-art { display: block; position: absolute; right: 18px; bottom: 120px; width: 44%; height: min(64vh, 660px); z-index: 0; pointer-events: none;
+  background: no-repeat right bottom / contain; filter: drop-shadow(0 10px 24px var(--glow)); animation: waifu-float 6s ease-in-out infinite; }
+@keyframes waifu-float { 50% { transform: translateY(-10px); } }
+.waifus { display: none; }
+body.waifu .waifus { display: flex; gap: 8px; flex-wrap: wrap; }
+.waifus label { position: relative; cursor: pointer; }
+.waifus input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.waifus span { display: block; width: 52px; height: 52px; border-radius: 50%; border: 3px solid var(--olive-line); background: #FFF0F6 no-repeat center 8% / 190%; }
+.waifus label:hover span { border-color: var(--mustard); }
+.waifus label:has(input:checked) span { border-color: var(--orange); box-shadow: 0 0 0 3px var(--glow); }
+.waifus label:has(input:focus-visible) span { outline: 3px solid var(--mint); outline-offset: 2px; }
+@media (max-width: 880px) { body.waifu .waifu-art { display: none; } }
+/* funky in waifu: pastel colors, and sakura petals and hearts fall instead of the surfing Claude */
+@keyframes wf1 { 0%, 100% { --f1: #FF7EB6; } 20% { --f1: #B48CFF; } 40% { --f1: #7FD8E8; } 60% { --f1: #FFB86B; } 80% { --f1: #9EE6B8; } }
+@keyframes wf2 { 0%, 100% { --f2: #B48CFF; } 20% { --f2: #7FD8E8; } 40% { --f2: #FFB86B; } 60% { --f2: #9EE6B8; } 80% { --f2: #FF7EB6; } }
+@keyframes wf3 { 0%, 100% { --f3: #7FD8E8; } 20% { --f3: #FFB86B; } 40% { --f3: #9EE6B8; } 60% { --f3: #FF7EB6; } 80% { --f3: #B48CFF; } }
+@keyframes wf4 { 0%, 100% { --f4: #FFB86B; } 20% { --f4: #9EE6B8; } 40% { --f4: #FF7EB6; } 60% { --f4: #B48CFF; } 80% { --f4: #7FD8E8; } }
+@keyframes wf5 { 0%, 100% { --f5: #9EE6B8; } 20% { --f5: #FF7EB6; } 40% { --f5: #B48CFF; } 60% { --f5: #7FD8E8; } 80% { --f5: #FFB86B; } }
+body.waifu.funky { animation: wf1 2.3s linear infinite, wf2 3.1s linear infinite, wf3 3.7s linear infinite, wf4 4.3s linear infinite, wf5 5.3s linear infinite; }
+body.waifu.funky aside { border-right-color: var(--f2); }
+body.waifu.funky header { border-bottom-color: var(--f3); }
+body.waifu.funky form { border-top-color: var(--f4); }
+body.waifu.funky :is(.bubble-bot, .busy, .field) { background: linear-gradient(135deg, var(--f4), var(--f2)); }
+body.waifu.funky .bubble-bot.claude { background: linear-gradient(135deg, var(--f1), var(--f3)); }
+body.waifu.funky .bubble-me { padding: 2px; background: linear-gradient(135deg, var(--f3), var(--f5)); }
+body.waifu.funky .bubble-me > div { background: #FFFFFF; color: var(--text); border-radius: 20px 20px 4px 20px; }
+body.waifu.funky :is(.new, .send) { background: linear-gradient(135deg, var(--orange), var(--mustard)); }   /* white text stays readable */
+body.waifu.funky .brand b i { color: var(--orange); }
+body.waifu.funky .waifu-art { filter: drop-shadow(0 0 22px var(--f1)); }
+body.waifu .surfer { display: none !important; }
+.petals { display: none; position: fixed; inset: 0; z-index: 45; pointer-events: none; overflow: hidden; }
+body.waifu.surfing .petals { display: block; }
+.petals i { position: absolute; top: -30px; left: var(--x); width: 14px; height: 10px; background: #FFB7D5; border-radius: 100% 0 100% 0; opacity: .85;
+  animation: petal var(--t) linear var(--d) infinite; }
+.petals i.h { width: auto; height: auto; background: none; border-radius: 0; font: 18px sans-serif; font-style: normal; color: #FF7EB6; }
+.petals i.h::before { content: "♥"; }
+@keyframes petal { from { transform: translate(0, 0) rotate(0); } to { transform: translate(-140px, calc(100vh + 60px)) rotate(600deg); } }
 </style>
 </head>
 <body>
-<script>try { if (localStorage.getItem("hygra-theme") === "cyber") document.body.classList.add("cyber"); } catch {}   // before the first paint, so #boot already has the theme</script>
+<script>try {   // before the first paint, so #boot already has the theme
+  const t = localStorage.getItem("hygra-theme");
+  if (t === "cyber" || t === "waifu") document.body.classList.add(t);
+  document.body.dataset.waifu = localStorage.getItem("hygra-waifu") || "";
+} catch {}</script>
 <div id="boot" role="status" aria-live="polite">
   <svg width="132" height="132" viewBox="0 0 60 60" aria-hidden="true">
     <path d="M10 3 L57 3 L57 50 L50 57 L3 57 L3 10 Z" fill="#2E3714" stroke="#FF7A1A" stroke-width="5"/>
@@ -527,6 +654,7 @@ body.cyber .app::after { content: ""; position: fixed; inset: 0; z-index: 40; po
   </aside>
 
   <main>
+    <div class="waifu-art" id="waifu-art" aria-hidden="true"></div>
     <header>
       <h1 id="title">Nieuw gesprek</h1>
       <span class="status" id="status">
@@ -553,7 +681,9 @@ body.cyber .app::after { content: ""; position: fixed; inset: 0; z-index: 40; po
   <div class="seg" role="radiogroup" aria-label="Thema">
     <label><input type="radio" name="theme" value="hg">HYDRARGYRUM</label>
     <label><input type="radio" name="theme" value="cyber">NIGHT CITY</label>
+    <label><input type="radio" name="theme" value="waifu">WAIFU</label>
   </div>
+  <div class="waifus" id="waifus" role="radiogroup" aria-label="Waifu"></div>
   <div class="toggles">
     <label class="chip" title="Funky mode: kleuren wisselen en Claude surft zolang er iets bezig is">
       <input type="checkbox" id="funky">
@@ -569,6 +699,7 @@ body.cyber .app::after { content: ""; position: fixed; inset: 0; z-index: 40; po
   <small class="keys">CTRL+N nieuw · CTRL+B zijbalk · CTRL+O details · CTRL+, instellingen</small>
 </div>
 
+<div class="petals" aria-hidden="true"><i class="h" style="--x:0%;--d:-0.0s;--t:7s"></i><i style="--x:37%;--d:-1.3s;--t:8s"></i><i style="--x:74%;--d:-2.6s;--t:9s"></i><i class="h" style="--x:11%;--d:-3.9s;--t:10s"></i><i style="--x:48%;--d:-5.2s;--t:11s"></i><i style="--x:85%;--d:-6.5s;--t:12s"></i><i class="h" style="--x:22%;--d:-7.8s;--t:7s"></i><i style="--x:59%;--d:-0.1s;--t:8s"></i><i style="--x:96%;--d:-1.4s;--t:9s"></i><i class="h" style="--x:33%;--d:-2.7s;--t:10s"></i><i style="--x:70%;--d:-4.0s;--t:11s"></i><i style="--x:7%;--d:-5.3s;--t:12s"></i><i class="h" style="--x:44%;--d:-6.6s;--t:7s"></i><i style="--x:81%;--d:-7.9s;--t:8s"></i><i style="--x:18%;--d:-0.2s;--t:9s"></i><i class="h" style="--x:55%;--d:-1.5s;--t:10s"></i><i style="--x:92%;--d:-2.8s;--t:11s"></i><i style="--x:29%;--d:-4.1s;--t:12s"></i></div>
 <div class="surfer" aria-hidden="true"><div>
   <svg width="110" height="96" viewBox="0 0 110 96">
     <path d="M55 4 L59 24 L77 29 L59 34 L55 54 L51 34 L33 29 L51 24 Z" fill="#7FE0C8"/>
@@ -1443,16 +1574,47 @@ $("prefs").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stop
 document.addEventListener("mousedown", (e) => { if (!$("prefs").contains(e.target) && !$("prefs-btn").contains(e.target)) setPrefs(false); });
 window.addEventListener("resize", () => setPrefs(false));
 
-// thema: HYDRARGYRUM (olijf) of NIGHT CITY (cyberpunk); app.py onthoudt het ook, zodat de splash meekleurt
+// thema: HYDRARGYRUM (olijf), NIGHT CITY (cyberpunk) of WAIFU; app.py onthoudt het ook, zodat de splash meekleurt
+const THEMES = ["hg", "cyber", "waifu"];
+const themeNow = () => THEMES.find((t) => document.body.classList.contains(t)) || "hg";
 function setTheme(t) {
-  document.body.classList.toggle("cyber", t === "cyber");
+  for (const k of THEMES) document.body.classList.toggle(k, k === t && k !== "hg");
   for (const r of document.querySelectorAll('input[name="theme"]')) r.checked = r.value === t;
   try { localStorage.setItem("hygra-theme", t); } catch {}
   window.pywebview?.api?.theme(t).catch(() => {});
+  if (t === "waifu") loadWaifus();
 }
 for (const r of document.querySelectorAll('input[name="theme"]')) r.onchange = () => setTheme(r.value);
-setTheme(document.body.classList.contains("cyber") ? "cyber" : "hg");
-window.addEventListener("pywebviewready", () => setTheme(document.body.classList.contains("cyber") ? "cyber" : "hg"));
+
+// waifu: de figuren staan enkel lokaal (%LOCALAPPDATA%\HyGra\themes\waifu), app.py geeft ze als data-URL's
+let waifuArt = null;
+async function loadWaifus() {
+  if (waifuArt || !window.pywebview?.api) return;
+  waifuArt = await api().waifu().catch(() => ({}));
+  const names = Object.keys(waifuArt), box = $("waifus");
+  if (!names.length) {
+    const m = document.createElement("small");
+    m.className = "keys"; m.textContent = "Geen figuren gevonden in %LOCALAPPDATA%\\HyGra\\themes\\waifu";
+    box.replaceChildren(m); return;
+  }
+  box.replaceChildren(...names.map((n) => {
+    const l = document.createElement("label"), i = document.createElement("input"), face = document.createElement("span");
+    i.type = "radio"; i.name = "waifu"; i.value = n; i.onchange = () => setWaifu(n);
+    i.setAttribute("aria-label", n[0].toUpperCase() + n.slice(1));
+    face.style.backgroundImage = `url(${waifuArt[n]})`;
+    l.title = n[0].toUpperCase() + n.slice(1); l.append(i, face);
+    return l;
+  }));
+  setWaifu(names.includes(document.body.dataset.waifu) ? document.body.dataset.waifu : names.includes("ishtar") ? "ishtar" : names[0]);
+}
+function setWaifu(n) {
+  document.body.dataset.waifu = n;
+  try { localStorage.setItem("hygra-waifu", n); } catch {}
+  $("waifu-art").style.backgroundImage = waifuArt?.[n] ? `url(${waifuArt[n]})` : "";
+  for (const r of document.querySelectorAll('input[name="waifu"]')) r.checked = r.value === n;
+}
+setTheme(themeNow());
+window.addEventListener("pywebviewready", () => setTheme(themeNow()));
 
 $("funky").onchange = () => { try { localStorage.setItem("hygra-funky", $("funky").checked ? "1" : "0"); } catch {} syncFunky(); };
 $("form").onsubmit = send;

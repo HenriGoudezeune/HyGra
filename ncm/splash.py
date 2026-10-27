@@ -58,7 +58,8 @@ def saved_theme():
     """The theme the page chose last ('cyber' or 'hg'); Api.theme in app.py writes it."""
     try:
         with open(THEME_FILE, encoding="utf-8") as f:
-            return "cyber" if f.read().strip() == "cyber" else "hg"
+            t = f.read().strip()
+            return t if t in ("cyber", "waifu") else "hg"
     except OSError:
         return "hg"
 
@@ -67,6 +68,10 @@ if saved_theme() == "cyber":   # body.cyber in web/index.html, so the splash mat
     OLIVE, OLIVE_DEEP = 0x101018, 0x08080D
     ORANGE, MUSTARD, MINT, TEXT = 0xFF5A4F, 0xFCEE0A, 0x00F0FF, 0xDDF6F8
     FACE, LINE = "Rajdhani", 3
+elif saved_theme() == "waifu":   # body.waifu: light sakura palette, rounded font
+    OLIVE, OLIVE_DEEP = 0xFFF4F8, 0xFFFFFF
+    ORANGE, MUSTARD, MINT, TEXT = 0xD6418C, 0x8E5BD8, 0x177E93, 0x4A2B3F
+    FACE, LINE = "Rounded Mplus 1c ExtraBold", 3   # the GDI family name of the subset TTF
 WM_DESTROY, WM_CLOSE, WM_PAINT, WM_ERASEBKGND, WM_TIMER, WM_APP = 0x2, 0x10, 0xF, 0x14, 0x113, 0x8000
 CLASS = "HyGraSplash"
 
@@ -116,7 +121,7 @@ class Splash:
         self._t0 = time.perf_counter()
         self._ready = threading.Event()
         fonts = os.path.join(root, "web", "vendor", "fonts")
-        for f in ("ChakraPetch-Bold.ttf", "Rajdhani-Bold.ttf", "JetBrainsMono.ttf"):
+        for f in ("ChakraPetch-Bold.ttf", "Rajdhani-Bold.ttf", "MPLUSRounded1c-ExtraBold.ttf", "JetBrainsMono.ttf"):
             gdi32.AddFontResourceExW(os.path.join(fonts, f), 0x10, None)   # FR_PRIVATE: only for this process
         threading.Thread(target=self._run, args=(root, width, height, title), daemon=True).start()
         self._ready.wait(2)

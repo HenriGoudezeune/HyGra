@@ -7,6 +7,7 @@ directly through `window.pywebview.api`. Two kinds of partner:
 - the local NCM models: code completers that write the next chunks coarse-to-fine.
   Only one of them sits on the GPU at a time (4 GB).
 """
+import base64
 import json
 import ctypes
 import os
@@ -232,10 +233,24 @@ class Api:
         from ncm.splash import THEME_FILE
         try:
             with open(THEME_FILE, "w", encoding="utf-8") as f:
-                f.write("cyber" if name == "cyber" else "hg")
+                f.write(name if name in ("cyber", "waifu") else "hg")
         except OSError:
             pass
         return True
+
+    def waifu(self):
+        """The waifu theme's character art as data URLs ({name: url}). It lives only on this laptop, in
+        %LOCALAPPDATA%\\HyGra\\themes\\waifu (outside git: the art is not ours to publish); the page serves no files from there."""
+        folder = os.path.join(os.environ.get("LOCALAPPDATA", ROOT), "HyGra", "themes", "waifu")
+        art = {}
+        try:
+            names = sorted(f for f in os.listdir(folder) if f.lower().endswith(".png"))
+        except OSError:
+            return art
+        for f in names:
+            with open(os.path.join(folder, f), "rb") as fh:
+                art[f[:-4]] = "data:image/png;base64," + base64.b64encode(fh.read()).decode()
+        return art
 
     def taskbar(self, busy):
         """Indeterminate progress on the taskbar button while something is thinking, so you see it from elsewhere."""
@@ -418,7 +433,7 @@ def _window_bg():
     if sys.platform != "win32":
         return "#3B461C"
     from ncm.splash import saved_theme
-    return "#101018" if saved_theme() == "cyber" else "#3B461C"
+    return {"cyber": "#101018", "waifu": "#FFF4F8"}.get(saved_theme(), "#3B461C")
 
 
 if __name__ == "__main__":
