@@ -48,9 +48,23 @@ if __name__ == "__main__" and sys.platform == "win32":
         from ncm.splash import Splash
         splash = Splash(ROOT, *SIZE)
 
+import bottle  # noqa: E402
 import webview  # noqa: E402
 
 from ncm import claude_chat, history  # noqa: E402
+
+# pywebview sets no-cache on its files, but bottle's static_file overwrites those headers with its own, so
+# WebView2 cached index.html heuristically and kept showing an old page after an update
+_static_file = bottle.static_file
+
+
+def _static_no_cache(*a, **kw):
+    r = _static_file(*a, **kw)
+    r.set_header("Cache-Control", "no-cache")   # still cheap: revalidates with ETag/Last-Modified (304)
+    return r
+
+
+bottle.static_file = _static_no_cache
 
 # torch and the NCM code take ~4 s to import; Api._boot loads them while the window shows its loading screen
 torch = cut_function = load = load_decoder = next_chunk = None
@@ -394,6 +408,7 @@ if __name__ == "__main__":
     revealed = threading.Event()   # loaded also fires on a reload; reveal only once
     api._window.events.loaded += lambda: revealed.is_set() or (revealed.set(), reveal(api._window, api))
     # not private: localStorage (funky mode, filters, ...) must survive a restart
-    webview.start(private_mode=False,
+    # a test instance gets its own port: its own origin, so it never shares localStorage or cache with his HyGra
+    webview.start(private_mode=False, http_port=42002 if BACKGROUND else None,
                   storage_path=os.path.join(os.environ.get("LOCALAPPDATA", ROOT), "HyGra", "webview"))
     claude_chat.shutdown()
