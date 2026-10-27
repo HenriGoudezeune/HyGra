@@ -6,6 +6,10 @@ Each HyGra chat is one Claude Code session (`--session-id` on the first message,
 `--resume` afterwards) with full access, like Claude Code in a terminal: all tools, the
 user's own settings, CLAUDE.md and MCP servers, and no permission prompts.
 
+Every chat is also a Remote Control session, so it shows up in the Claude mobile app and on
+claude.ai/code: each reply asks the CLI for the bridge (the SDK's `remote_control` control
+request) and reattaches to the same remote session as the previous reply of that chat.
+
 Every reply runs as a detached job that writes its stream-json to a file under JOBS, not
 to a pipe: closing HyGra does not end it, and the next start follows the same file again.
 """
@@ -25,7 +29,8 @@ SYSTEM = ("Je draait in HyGra, een desktop-chatapp van HydrarGyrum, met volledig
 WORKDIR = os.path.expanduser("~")   # starts in the home folder, like a terminal would
 DATA = os.path.join(os.environ.get("LOCALAPPDATA", WORKDIR), "HyGra")
 LIMITS = os.path.join(DATA, "limits.json")   # last known usage of the plan
-JOBS = os.path.join(DATA, "jobs")            # one folder per reply: meta.json, prompt.txt, out.jsonl, err.txt
+JOBS = os.path.join(DATA, "jobs")            # one folder per reply: meta.json, in.jsonl, out.jsonl, err.txt
+REMOTE = os.path.join(DATA, "remote.json")   # HyGra session id -> Remote Control session (cse_...)
 
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 DETACH = NO_WINDOW | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
@@ -113,10 +118,32 @@ def refresh_limits():
     return res.get("limits") or last_limits()
 
 
+def _remotes():
+    try:
+        with open(REMOTE, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _remember_remote(session_id, bridge_id):
+    r = _remotes()
+    if bridge_id is None:
+        r.pop(session_id, None)
+    elif r.get(session_id) != bridge_id:
+        r[session_id] = bridge_id
+    else:
+        return
+    os.makedirs(DATA, exist_ok=True)
+    with open(REMOTE, "w", encoding="utf-8") as f:
+        json.dump(r, f)
+
+
 def forget(session_id):
     """Deletes the Claude Code transcript of a HyGra chat."""
     for f in glob.glob(os.path.join(os.path.expanduser("~"), ".claude", "projects", "*", f"{session_id}.jsonl")):
         os.remove(f)
+    _remember_remote(session_id, None)
 
 
 def session_exists(session_id):
@@ -169,7 +196,8 @@ def start(job_id, session_id, first, prompt, model=MODEL, cwd=None):
     exe = shutil.which("claude")
     if not exe:
         return {"error": "Claude Code (de 'claude'-opdracht) is niet gevonden. Installeer het en log in met je Pro-account."}
-    cmd = [exe, "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
+    cmd = [exe, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
+           "--include-partial-messages",
            "--model", model, "--append-system-prompt", SYSTEM, "--dangerously-skip-permissions",
            "--thinking-display", "summarized"]   # readable thinking summaries for DETAILS (hidden option)
     cmd += ["--no-session-persistence"] if session_id is None else ["--session-id" if first else "--resume", session_id]
@@ -178,9 +206,19 @@ def start(job_id, session_id, first, prompt, model=MODEL, cwd=None):
     d = _dir(job_id)
     shutil.rmtree(d, ignore_errors=True)
     os.makedirs(d)
-    with open(os.path.join(d, "prompt.txt"), "w", encoding="utf-8") as f:
-        f.write(prompt)
-    with open(os.path.join(d, "prompt.txt"), "rb") as inp, open(os.path.join(d, "out.jsonl"), "wb") as out, \
+    lines = []
+    if session_id is not None:   # also visible on the phone: open the Remote Control bridge first
+        rc = {"subtype": "remote_control", "enabled": True, "keep_session_on_exit": True}
+        bridge = _remotes().get(session_id)
+        if bridge:
+            rc["reattach_session_id"] = bridge
+        else:
+            rc["name"] = "HyGra · " + (" ".join(prompt.split())[:60] or "chat")
+        lines.append({"type": "control_request", "request_id": "rc", "request": rc})
+    lines.append({"type": "user", "message": {"role": "user", "content": prompt}})
+    with open(os.path.join(d, "in.jsonl"), "w", encoding="utf-8") as f:
+        f.writelines(json.dumps(x, ensure_ascii=False) + "\n" for x in lines)
+    with open(os.path.join(d, "in.jsonl"), "rb") as inp, open(os.path.join(d, "out.jsonl"), "wb") as out, \
             open(os.path.join(d, "err.txt"), "wb") as err:
         kw = dict(cwd=cwd if cwd and os.path.isdir(cwd) else WORKDIR, env=env, stdin=inp, stdout=out, stderr=err)
         try:
@@ -257,6 +295,10 @@ def follow(job_id, on_text, on_status):
             for b in c if isinstance(c, list) else []:
                 if b.get("type") == "tool_result":
                     emit(f"\n{result_line(b)}\n\n")
+        elif e.get("type") == "control_response" and meta.get("session"):
+            r = e.get("response") or {}
+            if r.get("subtype") == "success" and (r.get("response") or {}).get("bridge_session_id"):
+                _remember_remote(meta["session"], r["response"]["bridge_session_id"])
         elif e.get("type") == "rate_limit_event":
             limits = _limits(e.get("rate_limit_info") or {})
         elif e.get("type") == "result":
