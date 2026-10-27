@@ -429,6 +429,34 @@ body.cyber ::-webkit-scrollbar-thumb { border-width: 3px; }
 body.cyber .app::after { content: ""; position: fixed; inset: 0; z-index: 40; pointer-events: none;
   background: repeating-linear-gradient(0deg, rgba(0,240,255,.03) 0 1px, transparent 1px 3px); }
 
+/* funky in NIGHT CITY: neon colors that cut instead of blend, and while Claude works a scan beam,
+   glitch slices and a jittering title instead of the surfing Claude */
+@keyframes cf1 { 0%, 18% { --f1: #FF003C; } 20%, 38% { --f1: #00F0FF; } 40%, 58% { --f1: #FCEE0A; } 60%, 78% { --f1: #FF2BD6; } 80%, 98% { --f1: #9D4EDD; } 100% { --f1: #FF003C; } }
+@keyframes cf2 { 0%, 18% { --f2: #00F0FF; } 20%, 38% { --f2: #FCEE0A; } 40%, 58% { --f2: #FF2BD6; } 60%, 78% { --f2: #9D4EDD; } 80%, 98% { --f2: #FF003C; } 100% { --f2: #00F0FF; } }
+@keyframes cf3 { 0%, 18% { --f3: #FCEE0A; } 20%, 38% { --f3: #FF2BD6; } 40%, 58% { --f3: #9D4EDD; } 60%, 78% { --f3: #FF003C; } 80%, 98% { --f3: #00F0FF; } 100% { --f3: #FCEE0A; } }
+@keyframes cf4 { 0%, 18% { --f4: #FF2BD6; } 20%, 38% { --f4: #9D4EDD; } 40%, 58% { --f4: #FF003C; } 60%, 78% { --f4: #00F0FF; } 80%, 98% { --f4: #FCEE0A; } 100% { --f4: #FF2BD6; } }
+@keyframes cf5 { 0%, 18% { --f5: #9D4EDD; } 20%, 38% { --f5: #FF003C; } 40%, 58% { --f5: #00F0FF; } 60%, 78% { --f5: #FCEE0A; } 80%, 98% { --f5: #FF2BD6; } 100% { --f5: #9D4EDD; } }
+body.cyber.funky { animation: cf1 1.9s linear infinite, cf2 2.6s linear infinite, cf3 3.1s linear infinite, cf4 3.7s linear infinite, cf5 4.3s linear infinite; }
+body.cyber.funky :is(.bubble-me, .bubble-bot, .busy) { box-shadow: 0 0 14px -4px var(--f1); }
+body.cyber.funky .brand b i { color: var(--f2); text-shadow: 0 0 8px var(--f2); }
+body.cyber .surfer { display: none !important; }
+.cyber-fx { display: none; position: fixed; inset: 0; z-index: 45; pointer-events: none; overflow: hidden; }
+body.cyber.surfing .cyber-fx { display: block; }
+.cyber-fx .beam { position: absolute; left: 0; right: 0; top: 0; height: 140px;
+  background: linear-gradient(180deg, transparent, rgba(0, 240, 255, .07) 70%, rgba(0, 240, 255, .35) 98%, transparent);
+  animation: cyber-beam 2.8s linear infinite; }
+.cyber-fx .slice { position: absolute; left: 0; right: 0; height: var(--h); top: var(--y); opacity: 0; mix-blend-mode: screen;
+  background: linear-gradient(90deg, transparent, var(--c) 15%, transparent 35%, var(--c) 60%, transparent 85%);
+  animation: cyber-slice var(--t) steps(1) infinite; animation-delay: var(--d); }
+.cyber-fx .tag { position: absolute; right: 22px; bottom: 120px; font: 600 11px 'JetBrains Mono', monospace; letter-spacing: 2px; color: var(--f1, #FF003C);
+  animation: blink 1.1s infinite steps(2); }
+body.cyber.surfing h1 { animation: cyber-jitter 2.3s infinite steps(1); }
+@keyframes cyber-beam { from { transform: translateY(-140px); } to { transform: translateY(100vh); } }
+@keyframes cyber-slice { 0%, 86% { opacity: 0; transform: none; } 88% { opacity: .55; transform: translateX(-24px); } 91% { opacity: .3; transform: translateX(18px); } 94% { opacity: 0; } }
+@keyframes cyber-jitter { 0%, 88%, 100% { transform: none; text-shadow: 1.5px 0 rgba(255,90,79,.65), -1.5px 0 rgba(0,240,255,.65); }
+  90% { transform: translate(-3px, 1px) skewX(-6deg); text-shadow: 5px 0 #FF003C, -5px 0 #00F0FF; }
+  93% { transform: translate(2px, -1px); text-shadow: -4px 0 #FF003C, 4px 0 #00F0FF; }
+  96% { transform: translate(-1px, 0); text-shadow: 2px 0 #FCEE0A, -2px 0 #00F0FF; } }
 /* thema WAIFU, naar de Doki Theme en anime-interfaces: licht sakura-pastel, alles rond, hartjes en bloemetjes,
    een volwassen anime-figuur rechts in het gesprek; elke figuur kleurt de accenten mee */
 body.waifu {
@@ -699,6 +727,7 @@ body.waifu.surfing .petals { display: block; }
   <small class="keys">CTRL+N nieuw · CTRL+B zijbalk · CTRL+O details · CTRL+, instellingen</small>
 </div>
 
+<div class="cyber-fx" aria-hidden="true"><i class="beam"></i><i class="slice" style="--y:18%;--h:6px;--c:#FF003C;--t:3.1s;--d:-.4s"></i><i class="slice" style="--y:41%;--h:14px;--c:#00F0FF;--t:2.3s;--d:-1.2s"></i><i class="slice" style="--y:63%;--h:3px;--c:#FCEE0A;--t:3.7s;--d:-2.1s"></i><i class="slice" style="--y:82%;--h:9px;--c:#FF2BD6;--t:2.9s;--d:-.9s"></i><b class="tag">// NETRUNNING</b></div>
 <div class="petals" aria-hidden="true"><i class="h" style="--x:0%;--d:-0.0s;--t:7s"></i><i style="--x:37%;--d:-1.3s;--t:8s"></i><i style="--x:74%;--d:-2.6s;--t:9s"></i><i class="h" style="--x:11%;--d:-3.9s;--t:10s"></i><i style="--x:48%;--d:-5.2s;--t:11s"></i><i style="--x:85%;--d:-6.5s;--t:12s"></i><i class="h" style="--x:22%;--d:-7.8s;--t:7s"></i><i style="--x:59%;--d:-0.1s;--t:8s"></i><i style="--x:96%;--d:-1.4s;--t:9s"></i><i class="h" style="--x:33%;--d:-2.7s;--t:10s"></i><i style="--x:70%;--d:-4.0s;--t:11s"></i><i style="--x:7%;--d:-5.3s;--t:12s"></i><i class="h" style="--x:44%;--d:-6.6s;--t:7s"></i><i style="--x:81%;--d:-7.9s;--t:8s"></i><i style="--x:18%;--d:-0.2s;--t:9s"></i><i class="h" style="--x:55%;--d:-1.5s;--t:10s"></i><i style="--x:92%;--d:-2.8s;--t:11s"></i><i style="--x:29%;--d:-4.1s;--t:12s"></i></div>
 <div class="surfer" aria-hidden="true"><div>
   <svg width="110" height="96" viewBox="0 0 110 96">
