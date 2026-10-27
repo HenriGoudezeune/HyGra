@@ -795,8 +795,17 @@ function syncFunky() {
   document.body.classList.toggle("surfing", on && !!lanes.claude);
 }
 
+// taakbalk: bewegende "bezig"-balk op de knop zolang Claude of de GPU iets doet
+let taskbarBusy = false;
+function syncTaskbar() {
+  const on = !!(lanes.claude || lanes.gpu);
+  if (on === taskbarBusy || !window.pywebview || !window.pywebview.api) return;
+  taskbarBusy = on; window.pywebview.api.taskbar(on).catch(() => {});
+}
+
 function refreshUi() {
   syncFunky();
+  syncTaskbar();
   const lane = laneOf($("model").value), job = lanes[lane], other = lanes[lane === "claude" ? "gpu" : "claude"];
   $("send").disabled = !!job;
   $("send").querySelector(".i-send").style.display = job ? "none" : "";

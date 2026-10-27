@@ -38,6 +38,7 @@ class Api:
         self.lock = threading.Lock()
         self.m = {}
         self._window = None
+        self._hwnd = None
 
     def _use(self, name):
         if self.m.get("name") == name:
@@ -95,6 +96,12 @@ class Api:
         res = claude_chat.reply(session_id, bool(first), prompt, on_text, on_status, cwd=cwd)
         flush()
         return res
+
+    def taskbar(self, busy):
+        """Indeterminate progress on the taskbar button while something is thinking, so you see it from elsewhere."""
+        if self._hwnd:
+            _taskbar_progress(self._hwnd, 1 if busy else 0)   # TBPF_INDETERMINATE / TBPF_NOPROGRESS
+        return True
 
     # ----- files named in a reply: links only for files that really exist
     def paths(self, items, cwd=None, bases=()):
@@ -172,6 +179,23 @@ def _resolve(s, cwd=None, bases=()):
     return None
 
 
+def _taskbar_progress(hwnd, state):
+    """ITaskbarList3::SetProgressState through a raw COM vtable (pywin32 has no wrapper for it)."""
+    ole32 = ctypes.windll.ole32
+    ole32.CoInitialize(None)   # js_api calls arrive on their own thread
+    clsid, iid = ctypes.create_string_buffer(16), ctypes.create_string_buffer(16)
+    ole32.CLSIDFromString("{56FDF344-FD6D-11d0-958A-006097C9A090}", clsid)   # CLSID_TaskbarList
+    ole32.IIDFromString("{EA1AFB91-9E28-4B86-90E9-9E9F8A5EEFAF}", iid)       # IID_ITaskbarList3
+    obj = ctypes.c_void_p()
+    if ole32.CoCreateInstance(clsid, None, 1, iid, ctypes.byref(obj)) or not obj:   # CLSCTX_INPROC_SERVER
+        return
+    vtbl = ctypes.cast(obj, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p)))[0]
+    method = lambda i, *args: ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, *args)(vtbl[i])
+    method(3)(obj)                                                    # HrInit
+    method(10, ctypes.c_void_p, ctypes.c_int)(obj, hwnd, state)       # SetProgressState
+    method(2)(obj)                                                    # Release
+
+
 def set_icon(window):
     """Gives the window (and so the taskbar button) the HyGra icon instead of Python's."""
     user32 = ctypes.windll.user32
@@ -203,6 +227,7 @@ if __name__ == "__main__":
                                        width=1280, height=860, min_size=(420, 600), background_color="#3B461C")
     if sys.platform == "win32":
         api._window.events.shown += lambda: set_icon(api._window)
+        api._window.events.shown += lambda: setattr(api, "_hwnd", api._window.native.Handle.ToInt64() or None)
     # not private: localStorage (funky mode, filters, ...) must survive a restart
     webview.start(private_mode=False,
                   storage_path=os.path.join(os.environ.get("LOCALAPPDATA", ROOT), "HyGra", "webview"))
