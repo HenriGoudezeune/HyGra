@@ -180,6 +180,10 @@ body:not(.verbose) .md details.tool.agent > .tool-more { display: flex; }
 body:not(.verbose) .md details.tool.agent > .tool-more > :not(.tout) { display: none; }
 .md details.tool.worker { border-left-color: var(--orange); }
 .md details.tool.worker > summary b { color: var(--orange); }
+/* wat een sub-agent onderweg zegt: niet in de hoofdchat, wel in de chat van die agent */
+.md .atext { display: none; }
+.md details.tool.agent > summary .achat { flex: 0 0 auto; padding: 2px 8px; background: none; border: 2px solid var(--mustard); color: var(--mustard); font: 600 10px 'Chakra Petch', sans-serif; letter-spacing: 1px; cursor: pointer; }
+.md details.tool.agent > summary .achat:hover { background: var(--mustard); color: var(--olive-deep); }
 /* TEAM: de boom van alle agents in dit gesprek, rechts, zoals een verkenner */
 #team { flex: 0 0 300px; width: 300px; height: 100%; overflow-y: auto; padding: 22px 16px; background: var(--olive-deep); border-left: var(--line) solid var(--orange); display: flex; flex-direction: column; gap: 10px; }
 #team .thead { display: flex; justify-content: space-between; align-items: center; }
@@ -204,6 +208,31 @@ body:not(.verbose) .md details.tool.agent > .tool-more > :not(.tout) { display: 
 .head-r { display: flex; align-items: center; gap: 14px; }
 @media (max-width: 1100px) { #team { position: fixed; right: 0; top: 0; bottom: 0; z-index: 50; box-shadow: -6px 0 0 rgba(0,0,0,.3); } }
 body.cyber #team { border-left-width: 1px; }
+#team.reading { flex-basis: 460px; width: 460px; }
+@media (max-width: 1440px) { #team.reading { position: fixed; right: 0; top: 0; bottom: 0; z-index: 50; box-shadow: -6px 0 0 rgba(0,0,0,.3); } }   /* past niet meer naast de chat: erover */
+#team .achead { display: flex; flex-direction: column; gap: 4px; padding-bottom: 10px; border-bottom: 3px solid var(--olive-line); }
+#team .achead button.back { align-self: flex-start; background: none; border: 0; padding: 0; color: var(--text-mute); font: 600 11px 'Chakra Petch', sans-serif; letter-spacing: 1px; cursor: pointer; }
+#team .achead button.back:hover { color: var(--text); }
+#team .achead b { color: var(--mustard); letter-spacing: 1px; }
+#team .achead span { font-size: 13px; color: var(--text); }
+#team .achead small { font: 11px 'JetBrains Mono', monospace; color: var(--text-mute); }
+#team .achat-log { display: flex; flex-direction: column; gap: 10px; }
+#team .amsg { padding: 10px 12px; background: var(--olive); font-size: 14px; line-height: 1.5; }
+#team .amsg > i { display: block; font-style: normal; font-size: 10px; letter-spacing: 2px; font-weight: 600; color: var(--mustard); margin-bottom: 4px; }
+#team .amsg.task { border-left: 4px solid var(--mint); } #team .amsg.task > i { color: var(--mint); }
+#team .amsg.result { border-left: 4px solid var(--mustard); }
+#team .amsg.err { border-left-color: var(--orange); } #team .amsg.err > i { color: var(--orange); }
+#team .amsg.md p { margin: 0 0 8px; } #team .amsg.md p:last-child { margin: 0; }
+#team .astep { font: 12px 'JetBrains Mono', monospace; color: var(--text-dim); border-left: 3px solid var(--olive-line); }
+#team .astep summary { list-style: none; display: flex; gap: 8px; padding: 4px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#team .astep summary::-webkit-details-marker { display: none; }
+#team .astep summary b { color: var(--mint); } #team .astep.worker summary b { color: var(--orange); }
+#team .astep pre { margin: 0 8px 6px; padding: 6px 8px; max-height: 240px; overflow: auto; background: #252D10; white-space: pre-wrap; word-break: break-word; font-size: 11.5px; }
+#team .asub { display: flex; gap: 8px; align-items: center; padding: 6px 8px; background: none; border: 2px dashed var(--mustard); color: var(--text); cursor: pointer; font: 12px 'Chakra Petch', sans-serif; text-align: left; }
+#team .asub b { color: var(--mustard); }
+#team .awork { font: 12px 'JetBrains Mono', monospace; color: var(--mint); }
+body.cyber #team .astep pre { background: #0C0C14; } body.waifu #team .astep pre { background: #FFF6FA; border-radius: 8px; }
+body.waifu #team .amsg { border-radius: 0 12px 12px 0; }
 body.waifu #team .trow { border-radius: 10px; }
 body.funky .md details.code { border-left-color: var(--f2); }
 .md strong { color: #FFF1CC; }
@@ -777,6 +806,7 @@ body.waifu.surfing .petals { display: block; }
     <div class="thead"><b>TEAM</b><button class="icon-btn" id="team-close" type="button" aria-label="Sluiten"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2 L14 14 M14 2 L2 14" stroke="#FF7A1A" stroke-width="3"/></svg></button></div>
     <small class="tsum" id="team-sum"></small>
     <div id="team-tree"></div>
+    <div id="team-chat" class="hidden"></div>
   </aside>
 </div>
 
@@ -968,11 +998,12 @@ marked.use({
       renderer(t) { const [name, ...rest] = t.text.split(" · ");
         let d = null; try { d = t.detail && JSON.parse(t.detail); } catch {}
         const kind = toolKind(name), i = (d && d.i) || {};
-        const head = kind === "agent" ? "<b>" + esc((i.subagent_type || "agent").toUpperCase()) + "</b><span>" + esc(i.description || rest.join(" · ")) + "</span><em></em>"
-          : kind === "worker" ? "<b>" + esc(MODEL_LABEL.local) + "</b><span>" + esc(name.endsWith("batch") ? (i.tasks || []).length + " taken tegelijk" : String(i.task || "").slice(0, 160)) + "</span>"
+        const head = kind === "agent" ? "<b>" + esc((i.subagent_type || "agent").toUpperCase()) + "</b><span>" + esc(i.description || rest.join(" · ")) + '</span><em></em><button type="button" class="achat" title="Lees de chat van deze agent">CHAT</button>'
+          : kind === "worker" ? "<b>" + esc(MODEL_LABEL.local) + "</b><span>" + esc(name.endsWith("batch") ? (i.tasks || []).length + " taken na elkaar" : String(i.task || "").slice(0, 160)) + "</span>"
           : "<b>" + esc(name) + "</b>" + (rest.length ? "<span>" + esc(rest.join(" · ")) + "</span>" : "");
         if (!d) return '<div class="tool">' + head + "</div>";   // older replies: only the line
         return '<details class="tool' + (d.sub ? " sub" : "") + (kind ? " " + kind : "") + '" data-id="' + esc(d.id || "") + '"' +
+          (kind === "agent" && i.prompt ? ' data-prompt="' + esc(String(i.prompt)) + '"' : "") +
           (d.p ? ' data-p="' + esc(d.p) + '"' : "") + (d.t ? ' data-t="' + d.t + '"' : "") + "><summary>" + head + "</summary>" +
           (kind === "agent" ? '<div class="team-kids"></div>' : "") + '<div class="tool-more">' + toolInput(i) + "</div></details>"; } },
     { name: "tout", level: "block", start: (s) => s.indexOf("⁣tout "),
@@ -980,6 +1011,10 @@ marked.use({
       renderer(t) { let d = {}; try { d = JSON.parse(t.text); } catch {}
         return '<div class="tout' + (d.err ? " err" : "") + '" data-id="' + esc(d.id || "") + '"' + (d.t ? ' data-t="' + d.t + '"' : "") + '><i>' + (d.err ? "FOUT" : "UITVOER") +
           "</i><pre>" + esc(String(d.o ?? "").trim() || "(leeg)") + "</pre></div>"; } },
+    { name: "atext", level: "block", start: (s) => s.indexOf("⁣atext "),
+      tokenizer(s) { const m = /^⁣atext ([^\n]*)(?:\n|$)/.exec(s); if (m) return { type: "atext", raw: m[0], text: m[1] }; },
+      renderer(t) { let d = {}; try { d = JSON.parse(t.text); } catch {}
+        return '<div class="atext" data-p="' + esc(d.p || "") + '" data-x="' + esc(String(d.x || "")) + '"' + (d.t ? ' data-t="' + d.t + '"' : "") + "></div>"; } },
     { name: "think", level: "block", start: (s) => s.indexOf("⁣think "),
       tokenizer(s) { const m = /^⁣think ([^\n]*)(?:\n|$)/.exec(s); if (m) return { type: "think", raw: m[0], text: m[1] }; },
       renderer(t) { let x = ""; try { x = JSON.parse(t.text); } catch {}
@@ -1012,7 +1047,7 @@ function toolInput(i) {
 const toolKind = (name) => /^(Agent|Task)$/.test(name) ? "agent" : /^mcp__hygra-local__/.test(name) ? "worker" : "";
 function nestTools(root) {
   // a subagent's steps go into the folder of the Agent call that started it (also several levels deep)
-  root.querySelectorAll("details.tool[data-p]").forEach((d) => {
+  root.querySelectorAll("details.tool[data-p], .atext[data-p]").forEach((d) => {
     const host = root.querySelector('details.agent[data-id="' + CSS.escape(d.dataset.p) + '"] > .team-kids');
     if (host && d.parentElement !== host && !d.contains(host)) host.appendChild(d);
   });
@@ -1038,7 +1073,7 @@ function agentMeta(root, live) {
   });
 }
 // copying a reply: without the invisible detail lines
-const plainText = (t) => t.replace(/^\u2063(?:tin|tout|think) .*(?:\n|$)/gm, "")
+const plainText = (t) => t.replace(/^\u2063(?:tin|tout|think|atext) .*(?:\n|$)/gm, "")
   .replace(/^\u2063me (.*)$/gm, (_, j) => { try { return "> Jij: " + JSON.parse(j).t; } catch { return ""; } })
   .replace(/\u2063tool /g, "> ").replace(/\n{3,}/g, "\n\n");
 
@@ -1753,6 +1788,7 @@ function syncTeam(soon) {
   $("team").classList.toggle("hidden", !open);
   $("team-btn").classList.toggle("on", open); $("team-btn").setAttribute("aria-expanded", String(open));
   if (!open) return;
+  if (agentOpen) renderAgentChat();
   const agents = log.querySelectorAll("details.agent").length, workers = log.querySelectorAll("details.worker").length;
   $("team-sum").textContent = !all.length ? "" : agents + (agents === 1 ? " agent" : " agents") + (workers ? " · " + workers + "x lokaal model" : "") + (run.length ? " · " + run.length + " bezig" : "");
   const tree = $("team-tree");
@@ -1766,10 +1802,7 @@ function syncTeam(soon) {
     b.querySelector("b").textContent = d.querySelector(":scope > summary b").textContent;
     b.querySelector("small").textContent = meta ? meta.textContent.split(" · ").filter((x) => /\d/.test(x) && !x.startsWith("nu:")).slice(0, 1).join("") : running ? "bezig" : "";
     b.querySelector("span").textContent = d.querySelector(":scope > summary span")?.textContent || "";
-    b.onclick = () => {   // de map en al haar ouders open, en ernaar scrollen
-      for (let x = d; x; x = x.parentElement.closest("details.agent")) x.open = true;
-      d.scrollIntoView({ block: "center", behavior: "smooth" });
-    };
+    b.onclick = () => worker ? showInChat(d) : openAgentChat(d.dataset.id);
     li.append(b);
     const kids = [...d.querySelectorAll(":scope > .team-kids > details.agent, :scope > .team-kids > details.worker")];
     if (kids.length) { const ul = document.createElement("ul"); ul.append(...kids.map(node)); li.append(ul); }
@@ -1781,13 +1814,73 @@ function syncTeam(soon) {
     return [h, ul];
   }));
 }
+function showInChat(d) {   // de map en al haar ouders open, en ernaar scrollen
+  for (let x = d; x; x = x.parentElement.closest("details.agent")) x.open = true;
+  d.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+// de chat van één agent: de opdracht die ze kreeg, wat ze onderweg zei en deed, haar sub-agents en haar resultaat
+let agentOpen = null;   // data-id van de agent waarvan de chat open staat
+function openAgentChat(id) {
+  agentOpen = id;
+  if ($("team").classList.contains("hidden")) setTeam(true);
+  renderAgentChat(true);
+}
+function closeAgentChat() { agentOpen = null; renderAgentChat(); }
+function renderAgentChat(top) {
+  const view = $("team-chat"), d = agentOpen && $("log").querySelector('details.agent[data-id="' + CSS.escape(agentOpen) + '"]');
+  $("team").classList.toggle("reading", !!d);
+  view.classList.toggle("hidden", !d); $("team-tree").classList.toggle("hidden", !!d); $("team-sum").classList.toggle("hidden", !!d);
+  if (!d) { agentOpen = null; return; }
+  const stick = !top && view.parentElement.scrollHeight - view.parentElement.scrollTop - view.parentElement.clientHeight < 80;
+  const parent = d.parentElement.closest("details.agent");
+  const head = document.createElement("div"); head.className = "achead";
+  head.innerHTML = '<button type="button" class="back"></button><b></b><span></span><small></small>';
+  head.querySelector(".back").textContent = "◂ " + (parent ? parent.querySelector(":scope > summary b").textContent : "TEAM");
+  head.querySelector(".back").onclick = () => parent ? openAgentChat(parent.dataset.id) : closeAgentChat();
+  head.querySelector("b").textContent = d.querySelector(":scope > summary b").textContent;
+  head.querySelector("span").textContent = d.querySelector(":scope > summary span").textContent;
+  head.querySelector("small").textContent = d.querySelector(":scope > summary em").textContent;
+  const log = document.createElement("div"); log.className = "achat-log";
+  const msg = (cls, label, md) => { const m = document.createElement("div"); m.className = "amsg md " + cls; m.innerHTML = "<i></i>" + markdown(md); m.querySelector("i").textContent = label; linkFiles(m, current && current.cwd); return m; };
+  if (d.dataset.prompt) log.append(msg("task", "OPDRACHT VAN " + (parent ? parent.querySelector(":scope > summary b").textContent : "CLAUDE"), d.dataset.prompt));
+  for (const k of d.querySelectorAll(":scope > .team-kids > *")) {
+    if (k.classList.contains("atext")) log.append(msg("", "AGENT", k.dataset.x));
+    else if (k.matches("details.agent")) {
+      const b = document.createElement("button"); b.type = "button"; b.className = "asub";
+      b.innerHTML = "<span>▸ SUB-AGENT</span><b></b><span></span>";
+      b.querySelector("b").textContent = k.querySelector(":scope > summary b").textContent;
+      b.querySelectorAll("span")[1].textContent = k.querySelector(":scope > summary span").textContent + " · " + k.querySelector(":scope > summary em").textContent;
+      b.onclick = () => openAgentChat(k.dataset.id);
+      log.append(b);
+    } else if (k.matches("details.tool")) {
+      const st = document.createElement("details"); st.className = "astep" + (k.classList.contains("worker") ? " worker" : "");
+      st.innerHTML = "<summary></summary>"; st.querySelector("summary").innerHTML = k.querySelector(":scope > summary").innerHTML;
+      const o = k.querySelector(":scope > .tool-more > .tout pre");
+      if (o) { const pre = document.createElement("pre"); pre.textContent = o.textContent; st.append(pre); }
+      else st.querySelector("summary").append(Object.assign(document.createElement("span"), { className: "awork", textContent: "…" }));
+      log.append(st);
+    }
+  }
+  const out = d.querySelector(":scope > .tool-more > .tout");
+  if (out) log.append(msg("result" + (out.classList.contains("err") ? " err" : ""), out.classList.contains("err") ? "FOUT" : "RESULTAAT", out.querySelector("pre").textContent));
+  else if (d.classList.contains("run")) log.append(Object.assign(document.createElement("div"), { className: "awork", textContent: "▌ werkt nog…" }));
+  view.replaceChildren(head, log);
+  if (top) view.parentElement.scrollTop = 0; else if (stick) view.parentElement.scrollTop = view.parentElement.scrollHeight;
+}
+$("log").addEventListener("click", (e) => {   // CHAT-knop in de kop van een agent-map: niet open/dicht klappen, maar haar chat tonen
+  const b = e.target.closest(".achat");
+  if (!b) return;
+  e.preventDefault(); e.stopPropagation();
+  openAgentChat(b.closest("details.agent").dataset.id);
+});
+
 function setTeam(open) {
   teamWanted = open;
   try { localStorage.setItem("hygra-team", open ? "1" : "0"); } catch {}
   syncTeam();
 }
 $("team-btn").onclick = () => setTeam($("team").classList.contains("hidden"));
-$("team-close").onclick = () => setTeam(false);
+$("team-close").onclick = () => { agentOpen = null; renderAgentChat(); setTeam(false); };
 
 /* --- MODELLEN: welke modellen in de keuzelijst staan, en per chatmodel installeren, inloggen en uitloggen --- */
 let prov = null;                  // status per chatmodel (uit providers.py), null tot die er is

@@ -30,7 +30,9 @@ MODEL = "claude-opus-5-5"
 SYSTEM = ("Je draait in HyGra, een desktop-chatapp van HydrarGyrum, met volledige toegang tot de computer "
           "van de gebruiker. Antwoord in de taal van de gebruiker (meestal Nederlands), helder en to the point. "
           "Gebruik Markdown (tabellen mogen); zet code altijd in een codeblok met de taal erbij. "
-          "Wiskunde mag in LaTeX: $...$ inline en $$...$$ apart; de app rendert dat met KaTeX.")
+          "Wiskunde mag in LaTeX: $...$ inline en $$...$$ apart; de app rendert dat met KaTeX. "
+          "Zet je agents in voor onafhankelijke deeltaken, start ze dan samen in één bericht zodat ze parallel lopen; "
+          "de app toont elk als een map met haar eigen chat.")
 WORKDIR = os.path.expanduser("~")   # starts in the home folder, like a terminal would
 DATA = os.path.join(os.environ.get("LOCALAPPDATA", WORKDIR), "HyGra")
 LIMITS = os.path.join(DATA, "limits.json")   # last known usage of the plan
@@ -47,6 +49,7 @@ TIN = "⁣tin "      # its input, its output (matched by tool id) and a thinking
 TOUT = "⁣tout "    # all but the tool line itself only show with DETAILS on
 THINK = "⁣think "
 ME = "⁣me "        # a message you sent while the reply ran, where Claude took it in
+ATEXT = "⁣atext "  # what a subagent wrote along the way (its own chat; the page shows it when you open that agent)
 CLIP = 6000   # longest input value or output kept for the details
 
 
@@ -94,6 +97,10 @@ def result_line(b, t=None):
 
 def think_line(text):
     return f"{THINK}{json.dumps(text.strip(), ensure_ascii=False)}"
+
+
+def agent_text_line(parent, text, t=None):
+    return f"{ATEXT}{json.dumps({'p': parent, 'x': text.strip(), 't': round(t or time.time(), 1)}, ensure_ascii=False)}"
 
 
 def me_line(uid, content):
@@ -384,15 +391,16 @@ def start(job_id, session_id, first, prompt, model=MODEL, cwd=None):
 
 
 def _lines(path, meta, offset=0):
-    """Yields the stream-json lines of a job from offset, waiting for new ones until Claude Code has exited."""
+    """Yields the stream-json lines of a job from offset, waiting for new ones until Claude Code has exited;
+    while nothing comes, an empty line every second (so the reader can decide it has waited long enough)."""
     with open(path, "rb") as f:
         f.seek(offset)
-        part, idle = b"", 0
+        part, idle, quiet = b"", 0, time.time()
         while True:
             chunk = f.readline()
             if chunk:
                 part += chunk
-                idle = 0
+                idle, quiet = 0, time.time()
                 if part.endswith(b"\n"):
                     yield part.decode("utf-8", "replace")
                     part = b""
@@ -402,6 +410,9 @@ def _lines(path, meta, offset=0):
                 for line in rest.decode("utf-8", "replace").splitlines():
                     yield line
                 return
+            if time.time() - quiet >= 1:
+                quiet = time.time()
+                yield ""
             idle += 1
             time.sleep(0.02 if idle < 250 else 0.1)   # quick while text flows, calmer when Claude waits on a tool
 
@@ -419,8 +430,10 @@ def follow(job_id, on_text, on_status, on_late=None):
     if not meta:
         return {"error": "Dit antwoord is verloren gegaan (geen jobmap meer)."}
     out = meta.get("out") or os.path.join(_dir(job_id), "out.jsonl")   # older jobs: their own out.jsonl
+    # bg: background agents still running; notes: how many of them reported back, results: turns ended, settled:
+    # a turn ended after the last report, quiet: seconds without new lines (see waiting())
     s = {"text": [], "limits": None, "new_block": False, "thought": None, "in": 0, "out": 0, "end": False,
-         "started": not meta.get("uuid")}
+         "started": not meta.get("uuid"), "bg": set(), "notes": 0, "results": 0, "settled": True, "quiet": 0}
     with _lock:   # messages sent during this reply that Claude Code has not taken in yet
         pending = _steers.setdefault(job_id, set(meta.get("steer") or []))
 
@@ -431,6 +444,7 @@ def follow(job_id, on_text, on_status, on_late=None):
     def handle(e):
         """One event; returns the result event that closes the turn."""
         typ = e.get("type")
+        s["quiet"] = s["quiet"] + 1 if typ == "_idle" else 0
         if typ == "control_response" and meta.get("session"):
             r = e.get("response") or {}
             if r.get("subtype") == "success" and (r.get("response") or {}).get("bridge_session_id"):
@@ -455,6 +469,8 @@ def follow(job_id, on_text, on_status, on_late=None):
                 s["out"] += (ev.get("usage") or {}).get("output_tokens") or 0
                 if (ev.get("delta") or {}).get("stop_reason") not in (None, "tool_use", "pause_turn"):
                     s["end"] = True
+            elif not main:   # a subagent's own text arrives whole, as an assistant message below
+                pass
             elif ev["type"] == "content_block_start":
                 kind = ev["content_block"]["type"]
                 on_status("denkt na" if kind == "thinking" else "werkt" if kind == "tool_use" else "schrijft")
@@ -471,23 +487,52 @@ def follow(job_id, on_text, on_status, on_late=None):
                 if "".join(s["thought"]).strip():
                     emit(f"\n\n{think_line(''.join(s['thought']))}\n\n")
                 s["thought"] = None
-        elif typ == "assistant":   # complete message: show each tool call as a line
+        elif typ == "assistant":   # complete message: show each tool call as a line, and what a subagent says
+            parent = e.get("parent_tool_use_id")
             for b in e["message"].get("content", []):
                 if b.get("type") == "tool_use":
-                    emit(f"\n\n{tool_lines(b, e.get('parent_tool_use_id'))}\n\n")
+                    emit(f"\n\n{tool_lines(b, parent)}\n\n")
+                elif parent and b.get("type") == "text" and b.get("text", "").strip():
+                    emit(f"\n\n{agent_text_line(parent, b['text'])}\n\n")
         elif typ == "user":   # tool output comes back as a user message
             c = (e.get("message") or {}).get("content")
             for b in c if isinstance(c, list) else []:
-                if b.get("type") == "tool_result":
+                if b.get("type") == "tool_result" and b.get("tool_use_id") not in s["bg"]:   # not "agent launched"
                     emit(f"\n{result_line(b)}\n\n")
+        elif typ == "system" and e.get("subtype") == "task_started":
+            if e.get("is_backgrounded") and e.get("task_type") == "local_agent" and e.get("tool_use_id"):
+                s["bg"].add(e["tool_use_id"])
+        elif typ == "system" and e.get("subtype") == "task_notification" and e.get("tool_use_id") in s["bg"]:
+            # a background agent is done: its result is the summary; Claude answers it in a turn of its own
+            s["bg"].discard(e["tool_use_id"])
+            s["notes"] += 1
+            s["settled"] = False
+            out = {"id": e["tool_use_id"], "o": _clip(e.get("summary") or ""), "t": round(time.time(), 1)}
+            if e.get("status") != "completed":
+                out["err"] = 1
+            emit(f"\n{TOUT}{json.dumps(out, ensure_ascii=False)}\n\n")
+            on_status("werkt")
         elif typ == "rate_limit_event":
             s["limits"] = _limits(e.get("rate_limit_info") or {})
         elif typ == "result":
+            s["results"] += 1
+            s["settled"] = True
             return e
         return None
 
+    def waiting():
+        """Background agents keep working after Claude's turn ends, and every one that reports back gets a turn of
+        Claude's own. The reply only ends once all of them are back and those turns are done (or, should Claude
+        fold several reports into one turn, once everything is back, answered and 5 s quiet)."""
+        if s["bg"] or not s["settled"]:
+            return True
+        return s["notes"] > s["results"] - 1 and s["quiet"] < 5
+
     def events():
         for line in lines:
+            if not line:
+                yield {"type": "_idle"}
+                continue
             try:
                 yield json.loads(line)
             except json.JSONDecodeError:
@@ -511,11 +556,18 @@ def follow(job_id, on_text, on_status, on_late=None):
 
     lines = _lines(out, meta, meta.get("offset", 0))
     result = None
+    last = None
     for e in events():
         result = handle(e)
-        if (result or s["end"]) and over():
+        last = result or last
+        if e.get("type") == "_idle" and s["results"] and not waiting() and over():
+            result = last   # the last turn's result closes the reply
+            break
+        if (result or s["end"]) and not waiting() and over():
             break
         result, s["end"] = None, False
+    else:   # Claude Code exited: a turn that did end still counts
+        result = last
     if s["end"] and not result:   # done for the page; the rest of the turn is read on the side
         early = len(s["text"])
 

@@ -1,6 +1,7 @@
 """hygra-local: an MCP server (stdio) that lets Claude Code hand small coding tasks to the local model that
-HyGra also uses (Qwen3-Coder 30B through Ollama). Free, offline, and several tasks can run side by side, so
-an agent can farm out drafts while it keeps working, and subagents can each use it too.
+HyGra also uses (Qwen3-Coder 30B through Ollama). Free and offline, so an agent can farm out drafts while it
+keeps working. Tasks run one at a time (calls queue), since the laptop has room for one fast Qwen reply, not
+several.
 
 Register once (user scope, so every project has it):
     claude mcp add --scope user hygra-local -- <python> <path to this file>
@@ -11,13 +12,12 @@ import os
 import sys
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ncm import other_chat  # noqa: E402
 
 MAX_FILE = 40000      # characters per attached file
-MAX_PARALLEL = 4      # Ollama queues anything beyond what it runs at once
+_one = threading.Lock()   # one Qwen task at a time: two at once only share the same CPU/GPU and both get slow
 SYSTEM = ("You are a careful senior programmer working as a helper for another AI agent. Do exactly the task given, "
           "nothing more. Reply with the result only: code in fenced blocks with the language, at most a few short "
           "lines of explanation when they are needed. If the task is unclear or impossible, say so in one line.")
@@ -47,10 +47,10 @@ TOOLS = [
     {
         "name": "local_code_batch",
         "description": (
-            "Run SEVERAL independent small coding tasks on the local model (Qwen3-Coder 30B) at the same time and get "
-            "all answers back together. Same strengths and limits as local_code. Use it to fan out e.g. tests for "
-            "several functions, docstrings for several files, or alternative drafts, while you keep the hard parts. "
-            "Tasks share the laptop's GPU/CPU, so 2-4 at once is the sweet spot; more just queue."),
+            "Queue SEVERAL independent small coding tasks for the local model (Qwen3-Coder 30B) in one call and get "
+            "all answers back together. They run one after another (one local model at a time), so this saves "
+            "round trips, not time. Same strengths and limits as local_code. Use it for e.g. tests for several "
+            "functions or docstrings for several files, while you keep the hard parts."),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -93,7 +93,8 @@ def ask(task, files=None, max_tokens=2048):
             "options": {"num_ctx": other_chat.LOCAL_CTX, "num_predict": max_tokens}}
     t0 = time.time()
     try:
-        r = json.load(other_chat._ollama("/api/chat", body, timeout=900))
+        with _one:   # also across parallel tool calls and subagents: they wait their turn
+            r = json.load(other_chat._ollama("/api/chat", body, timeout=900))
     except Exception as e:  # noqa: BLE001  (reported to the calling agent, never raised)
         return f"ERROR: {e}", True
     if r.get("error"):
@@ -109,8 +110,7 @@ def call(name, args):
         return ask(args["task"], args.get("files"), mt)
     if name == "local_code_batch":
         tasks = args.get("tasks") or []
-        with ThreadPoolExecutor(max_workers=min(MAX_PARALLEL, max(1, len(tasks)))) as pool:
-            res = list(pool.map(lambda t: ask(t["task"], t.get("files"), mt), tasks))
+        res = [ask(t["task"], t.get("files"), mt) for t in tasks]
         text = "\n\n".join(f"=== task {i + 1} ===\n{out}" for i, (out, _) in enumerate(res))
         return text, all(err for _, err in res) and bool(res)
     return f"ERROR: unknown tool {name}", True
@@ -151,7 +151,7 @@ def main():
             m = json.loads(line)
         except ValueError:
             continue
-        # every request on its own thread: parallel tool calls from Claude really run side by side
+        # every request on its own thread: a ping or tools/list is not stuck behind a long task (tasks queue on _one)
         threading.Thread(target=handle, args=(m,), daemon=True).start()
 
 
