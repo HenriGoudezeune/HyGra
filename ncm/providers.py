@@ -37,6 +37,13 @@ CLI = {
         "login": ("agy", "Log in met je Google-account in de browser die opent. Ben je al ingelogd? Typ dan /logout en start opnieuw. Sluit dit venster met Ctrl+C als je klaar bent."),
         "logout": ("agy", "Typ /logout, bevestig, en sluit dit venster daarna met Ctrl+C."),
     },
+    "local": {
+        "exe": "ollama", "name": "Ollama",
+        "install": ("winget install -e --id Ollama.Ollama --accept-source-agreements --accept-package-agreements",
+                    "Ollama wordt geinstalleerd - draait lokale modellen."),
+        "login": (f"ollama pull {other_chat.LOCAL_MODEL}", f"{other_chat.LOCAL_NAME} wordt gedownload - ongeveer 19 GB."),
+        "logout": (f"ollama rm {other_chat.LOCAL_MODEL}", f"{other_chat.LOCAL_NAME} wordt van je schijf verwijderd."),
+    },
 }
 NODE = ("winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements",
         "Node.js ontbreekt - nodig voor npm. Het wordt nu geinstalleerd. Klik daarna in HyGra nog eens op INSTALLEREN.")
@@ -105,17 +112,24 @@ def _gemini():
     return {"ready": True, "plan": "met Pro" if pro else "zonder Pro (enkel Flash)", "model_name": best[1]}
 
 
+def _local():
+    if not other_chat.local_ready():
+        return {"ready": False, "detail": f"{other_chat.LOCAL_NAME} nog niet gedownload (19 GB)"}
+    return {"ready": True, "plan": "op je laptop · gratis · niets verlaat je computer"}
+
+
 def status():
     """{key: {installed, ready, account, plan, warn, label, name}} for the chat models, checked in parallel."""
     out = {}
 
     def one(key, fn):
         cli = CLI[key]
-        s = {"installed": bool(shutil.which(cli["exe"])), "ready": False, "cli": cli["name"]}
+        found = other_chat.ollama_exe() if key == "local" else shutil.which(cli["exe"])
+        s = {"installed": bool(found), "ready": False, "cli": cli["name"]}
         if s["installed"]:
             s.update(fn())
         out[key] = s
-    threads = [threading.Thread(target=one, args=a) for a in (("claude", _claude), ("gpt", _codex), ("gemini", _gemini))]
+    threads = [threading.Thread(target=one, args=a) for a in (("claude", _claude), ("gpt", _codex), ("gemini", _gemini), ("local", _local))]
     for t in threads:
         t.start()
     for t in threads:
@@ -128,6 +142,8 @@ def status():
 def action(key, what, on_done):
     """Opens a console window that runs install / login / logout for that model; on_done() once it is closed."""
     cmd, note = CLI[key][what]
+    if key == "local" and what != "install":   # ollama may not be on PATH yet right after installing it
+        cmd = cmd.replace("ollama", f'"{other_chat.ollama_exe() or "ollama"}"', 1)
     if what == "install" and cmd.startswith("npm") and not shutil.which("npm"):
         cmd, note = NODE
     if what == "install" and cmd.startswith("winget") and not shutil.which("winget"):

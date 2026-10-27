@@ -69,21 +69,24 @@ def _clip(v):
     return v
 
 
-def tool_lines(b, sub=False):
-    """A tool_use block as the tool line plus its input; sub: called by a subagent."""
+def tool_lines(b, parent=None, t=None):
+    """A tool_use block as the tool line plus its input; parent: the Agent call whose subagent made it (the page
+    nests it there, so an agent team shows as a tree), t: when it started (unix time, for durations)."""
     inp = b.get("input") or {}
-    detail = {"id": b.get("id"), "i": _clip(inp)}
-    if sub:
+    detail = {"id": b.get("id"), "i": _clip(inp), "t": round(t or time.time(), 1)}
+    if parent:
         detail["sub"] = 1
+        detail["p"] = parent
     return f"{TOOL}{b.get('name')}{_describe(inp)}\n{TIN}{json.dumps(detail, ensure_ascii=False)}"
 
 
-def result_line(b):
-    """A tool_result block as one line: its text output, matched to the call by id."""
+def result_line(b, t=None):
+    """A tool_result block as one line: its text output, matched to the call by id; t: when it came back."""
     c = b.get("content")
     if isinstance(c, list):
         c = "\n".join(x.get("text", "") if x.get("type") == "text" else "[afbeelding]" for x in c if isinstance(x, dict))
-    out = {"id": b.get("tool_use_id"), "o": _clip(c if isinstance(c, str) else json.dumps(c, ensure_ascii=False))}
+    out = {"id": b.get("tool_use_id"), "o": _clip(c if isinstance(c, str) else json.dumps(c, ensure_ascii=False)),
+           "t": round(t or time.time(), 1)}
     if b.get("is_error"):
         out["err"] = 1
     return f"{TOUT}{json.dumps(out, ensure_ascii=False)}"
@@ -471,7 +474,7 @@ def follow(job_id, on_text, on_status, on_late=None):
         elif typ == "assistant":   # complete message: show each tool call as a line
             for b in e["message"].get("content", []):
                 if b.get("type") == "tool_use":
-                    emit(f"\n\n{tool_lines(b, bool(e.get('parent_tool_use_id')))}\n\n")
+                    emit(f"\n\n{tool_lines(b, e.get('parent_tool_use_id'))}\n\n")
         elif typ == "user":   # tool output comes back as a user message
             c = (e.get("message") or {}).get("content")
             for b in c if isinstance(c, list) else []:

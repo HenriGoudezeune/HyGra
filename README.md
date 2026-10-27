@@ -18,8 +18,11 @@ HyGra (from *HydrarGyrum*, Hg, element 80) runs **Claude Opus 5.5** through Clau
 - **All your history in one list.** HyGra lists your Claude Code and Cowork sessions next to its own chats, with filters and search. You can continue Code sessions right in HyGra.
 - **ChatGPT and Gemini too.** Pick ChatGPT (through the [Codex](https://github.com/openai/codex) CLI, on a free ChatGPT account) or Gemini (through the Antigravity CLI, on your Google account; HyGra takes the best Gemini your account offers, Pro if you have it). Each chat keeps its own conversation per model, and a model you switch to gets the turns it missed as context. Local-model settings and mid-turn messages only show where they belong.
 - **Remote Control.** Every chat is also a session in the Claude mobile app and on claude.ai/code while a reply runs.
+- **Agent teams as folders.** Every agent Claude starts is a folder in the reply: type, task, status, duration and steps, with its own tool calls, sub-agents as subfolders and its result inside. The *Team* panel (Ctrl+T) shows all agents of the chat as a live tree; click one to jump to it. Calls to the local model show up as workers.
 - **See what Claude does.** *Details* (Ctrl+O) opens each tool call to its input and output, and shows Claude's thinking.
 - **Readable replies.** Markdown, KaTeX math, code blocks that start collapsed, and file paths you can click to open.
+- **A strong local coding model.** Qwen3-Coder 30B (mixture-of-experts, ~3B active per token) through [Ollama](https://ollama.com): free, offline, no account. It fits a 4 GB GPU plus 32 GB RAM at a usable speed. Install and download it from *Modellen beheren*.
+- **Claude can use it too.** `hygra_local_mcp.py` is an MCP server with `local_code` and `local_code_batch` (several tasks in parallel). Register it once with `claude mcp add --scope user hygra-local -- <venv python> <path>/hygra_local_mcp.py`, and every Claude Code session (and its subagents) can hand small coding tasks to the local model instead of spending plan usage.
 - **Usage at a glance.** The limits of the plan behind the chosen model: Claude's 5-hour and weekly windows, ChatGPT's and Gemini's own windows. Also as a small meter when the sidebar is folded in.
 - **Models in one panel.** *Modellen beheren* (bottom of the model list, or in settings) shows for every model whether it is installed and who is logged in, with buttons to install, log in, switch account or log out, and a switch to show or hide it in the list. Logging in always happens in the model's own tool and your browser; HyGra never sees a password.
 - **Feels native.** A splash screen in your theme, taskbar progress while Claude works, a blinking taskbar button when a reply lands, and a Start-menu shortcut. It works offline: fonts and libraries are bundled.
@@ -43,6 +46,7 @@ Pick one in the settings panel (the sliders button next to the logo, or **Ctrl+,
 
 | Keys | Does |
 |---|---|
+| Ctrl+T | Agent-team panel |
 | Enter / Shift+Enter | Send / new line (while Claude works: send mid-turn) |
 | Esc | Stop the reply |
 | Ctrl+N | New chat |

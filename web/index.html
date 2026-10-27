@@ -161,6 +161,50 @@ body:not(.verbose) .md .tool-more, body:not(.verbose) .md .think, .md > .tout { 
 .queued > div { padding: 8px 14px; border: 2px dashed var(--mustard); background: rgba(242, 193, 78, .06); }
 .queued i::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 8px; background: var(--mustard); animation: blink .8s infinite steps(2); }
 body:not(.verbose) .md details.tool summary { pointer-events: none; }
+/* agent-teams: elke agent is een map met zijn eigen stappen (en sub-agents als submappen) en zijn resultaat */
+.md details.tool.agent { background: var(--olive-deep); border-left-color: var(--mustard); margin: 8px 0 12px; }
+.md details.tool.agent > summary { pointer-events: auto; cursor: pointer; align-items: center; }
+.md details.tool.agent > summary::before { content: ""; flex: 0 0 auto; border-left: 8px solid var(--mustard); border-top: 6px solid transparent; border-bottom: 6px solid transparent; transition: transform .15s; }
+.md details.tool.agent[open] > summary::before { transform: rotate(90deg); }
+.md details.tool.agent > summary b { color: var(--mustard); letter-spacing: 1px; }
+.md details.tool.agent > summary span { color: var(--text); flex: 1 1 auto; }
+.md details.tool.agent > summary em { flex: 0 0 auto; font-style: normal; font-size: 11px; letter-spacing: 1px; color: var(--text-mute); }
+.md details.tool.agent.run > summary em { color: var(--mint); }
+.md details.tool.agent.err > summary em { color: var(--orange); }
+.md details.tool.agent.run > summary b::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 8px; background: var(--mint); animation: blink .8s infinite steps(2); }
+.md .team-kids { margin: 0 12px 8px 16px; padding-left: 12px; border-left: 2px dashed var(--olive-line); }
+.md .team-kids:empty { display: none; }
+.md .team-kids details.tool { margin: 4px 0; }
+.md .team-kids details.tool.sub { margin-left: 0; }
+body:not(.verbose) .md details.tool.agent > .tool-more { display: flex; }
+body:not(.verbose) .md details.tool.agent > .tool-more > :not(.tout) { display: none; }
+.md details.tool.worker { border-left-color: var(--orange); }
+.md details.tool.worker > summary b { color: var(--orange); }
+/* TEAM: de boom van alle agents in dit gesprek, rechts, zoals een verkenner */
+#team { flex: 0 0 300px; width: 300px; height: 100%; overflow-y: auto; padding: 22px 16px; background: var(--olive-deep); border-left: var(--line) solid var(--orange); display: flex; flex-direction: column; gap: 10px; }
+#team .thead { display: flex; justify-content: space-between; align-items: center; }
+#team .thead b { font-size: 14px; letter-spacing: 2px; color: var(--orange); }
+#team .tsum { font: 12px 'JetBrains Mono', monospace; color: var(--text-mute); }
+#team .tempty { font-size: 13px; color: var(--text-mute); line-height: 1.5; }
+#team ul { list-style: none; margin: 0; padding: 0; }
+#team ul ul { margin-left: 9px; padding-left: 10px; border-left: 2px dashed var(--olive-line); }
+#team li > .trow { display: grid; grid-template-columns: 14px 1fr auto; gap: 2px 8px; align-items: center; width: 100%; padding: 6px 6px; background: none; border: 0; text-align: left; cursor: pointer; font-family: inherit; color: var(--text-dim); }
+#team li > .trow:hover { background: var(--olive); color: var(--text); }
+#team .trow i { width: 9px; height: 9px; background: var(--text-mute); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+#team .trow.run i { background: var(--mint); animation: blink .8s infinite steps(2); }
+#team .trow.done i { background: var(--mustard); }
+#team .trow.err i { background: var(--orange); }
+#team .trow b { font-size: 12px; letter-spacing: 1px; color: var(--mustard); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#team .trow.worker b { color: var(--orange); }
+#team .trow small { font: 11px 'JetBrains Mono', monospace; color: var(--text-mute); }
+#team .trow span { grid-column: 2 / 4; font-size: 12px; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+#team .tturn { margin-top: 6px; font-size: 11px; letter-spacing: 1px; color: var(--text-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.team-btn.on { background: var(--orange); }
+.team-btn.on svg path { stroke: var(--olive-deep); }
+.head-r { display: flex; align-items: center; gap: 14px; }
+@media (max-width: 1100px) { #team { position: fixed; right: 0; top: 0; bottom: 0; z-index: 50; box-shadow: -6px 0 0 rgba(0,0,0,.3); } }
+body.cyber #team { border-left-width: 1px; }
+body.waifu #team .trow { border-radius: 10px; }
 body.funky .md details.code { border-left-color: var(--f2); }
 .md strong { color: #FFF1CC; }
 .md a { color: var(--mint); }
@@ -669,6 +713,7 @@ body.waifu.surfing .petals { display: block; }
           <option value="claude">Claude Opus 5.5 · Pro</option>
           <option value="gpt">ChatGPT · gratis</option>
           <option value="gemini">Gemini · Google</option>
+          <option value="local">Qwen3-Coder 30B · lokaal</option>
           <option value="qwen">Qwen-NCM · lokaal</option>
           <option value="ncm">NCM 34M · lokaal</option>
         </select>
@@ -707,10 +752,15 @@ body.waifu.surfing .petals { display: block; }
     <div class="waifu-art" id="waifu-art" aria-hidden="true"></div>
     <header>
       <h1 id="title">Nieuw gesprek</h1>
+      <div class="head-r">
       <span class="status" id="status">
         <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M7 0 L14 7 L7 14 L0 7 Z" fill="#7FE0C8"/></svg>
         <span id="status-text">OPSTARTEN</span>
       </span>
+      <button class="icon-btn team-btn" id="team-btn" type="button" aria-controls="team" aria-expanded="false" aria-label="Agent-team" title="Agent-team (Ctrl+T)">
+        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 2 L3 18 M3 6 L9 6 M3 14 L9 14 M9 3 L17 3 L17 9 L9 9 Z M9 11 L17 11 L17 17 L9 17 Z" stroke="#FF7A1A" stroke-width="2.5" fill="none"/></svg>
+      </button>
+      </div>
     </header>
     <section id="log" aria-label="Berichten" aria-live="polite"></section>
     <form id="form">
@@ -723,6 +773,11 @@ body.waifu.surfing .petals { display: block; }
       </button>
     </form>
   </main>
+  <aside id="team" class="hidden" aria-label="Agent-team">
+    <div class="thead"><b>TEAM</b><button class="icon-btn" id="team-close" type="button" aria-label="Sluiten"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2 L14 14 M14 2 L2 14" stroke="#FF7A1A" stroke-width="3"/></svg></button></div>
+    <small class="tsum" id="team-sum"></small>
+    <div id="team-tree"></div>
+  </aside>
 </div>
 
 <!-- instellingen (Ctrl+,): klein paneel naast de knop bij het logo -->
@@ -747,7 +802,7 @@ body.waifu.surfing .petals { display: block; }
     </label>
   </div>
   <button class="manage" id="manage" type="button">MODELLEN BEHEREN · INLOGGEN</button>
-  <small class="keys">CTRL+N nieuw · CTRL+B zijbalk · CTRL+O details · CTRL+, instellingen</small>
+  <small class="keys">CTRL+N nieuw · CTRL+B zijbalk · CTRL+T team · CTRL+O details · CTRL+, instellingen</small>
 </div>
 
 <div class="prefs models hidden" id="models" role="dialog" aria-label="Modellen" aria-modal="true">
@@ -799,6 +854,13 @@ body.waifu.surfing .petals { display: block; }
     <path d="M20 16 L26 22 L20 28 L14 22 Z" fill="#2E3714"/>
   </svg>
 </template>
+<template id="t-avatar-local">
+  <!-- lokaal programmeermodel: hoekige codehaken -->
+  <svg class="avatar" width="40" height="44" viewBox="0 0 40 44" role="img" aria-label="Lokaal model">
+    <path d="M14 10 L4 22 L14 34 M26 10 L36 22 L26 34" fill="none" stroke="#7FE0C8" stroke-width="4"/>
+    <path d="M23 6 L17 38" stroke="#FF7A1A" stroke-width="4"/>
+  </svg>
+</template>
 <template id="t-avatar-ncm">
   <svg class="avatar" width="40" height="44" viewBox="0 0 40 44" role="img" aria-label="NCM">
     <path d="M20 2 L38 22 L20 42 L2 22 Z" fill="#FF7A1A"/>
@@ -834,12 +896,13 @@ body.waifu.surfing .petals { display: block; }
 const $ = (id) => document.getElementById(id);
 const COLORS = ["var(--orange)", "var(--orange)", "var(--mustard)", "var(--mustard)", "var(--mustard)", "var(--mint)", "var(--mint)", "var(--mint)", "var(--mint)"];
 const NAMES = ["1 code", "2", "4", "8", "16", "32", "48", "64", "64 codes"];
-const MODEL_LABEL = { claude: "CLAUDE OPUS 5.5", gpt: "CHATGPT", gemini: "GEMINI", qwen: "QWEN-NCM", ncm: "NCM 34M" };
+const MODEL_LABEL = { claude: "CLAUDE OPUS 5.5", gpt: "CHATGPT", gemini: "GEMINI", local: "QWEN3-CODER 30B", qwen: "QWEN-NCM", ncm: "NCM 34M" };
 // chatmodellen (Markdown, tools, parallel per gesprek) tegenover de lokale NCM's; per model wat erbij hoort
 const CHAT = {
   claude: { name: "Claude", ready: "KLAAR · CLAUDE PRO", cost: "via Pro, geen extra kost" },
   gpt: { name: "ChatGPT", ready: "KLAAR · CHATGPT GRATIS", cost: "via je gratis ChatGPT-account" },
   gemini: { name: "Gemini", ready: "KLAAR · GEMINI", cost: "via je Google-account" },
+  local: { name: "Qwen3-Coder", ready: "KLAAR · LOKAAL", cost: "lokaal en gratis" },
 };
 const isChatModel = (m) => m in CHAT;
 let chats = loadChats(), current = null, deviceName = "", hasClaude = true;
@@ -903,15 +966,19 @@ marked.use({
     { name: "tool", level: "block", start: (s) => s.indexOf("⁣tool "),
       tokenizer(s) { const m = /^⁣tool ([^\n]*)(?:\n⁣tin ([^\n]*))?(?:\n|$)/.exec(s); if (m) return { type: "tool", raw: m[0], text: m[1], detail: m[2] }; },
       renderer(t) { const [name, ...rest] = t.text.split(" · ");
-        const head = "<b>" + esc(name) + "</b>" + (rest.length ? "<span>" + esc(rest.join(" · ")) + "</span>" : "");
         let d = null; try { d = t.detail && JSON.parse(t.detail); } catch {}
+        const kind = toolKind(name), i = (d && d.i) || {};
+        const head = kind === "agent" ? "<b>" + esc((i.subagent_type || "agent").toUpperCase()) + "</b><span>" + esc(i.description || rest.join(" · ")) + "</span><em></em>"
+          : kind === "worker" ? "<b>" + esc(MODEL_LABEL.local) + "</b><span>" + esc(name.endsWith("batch") ? (i.tasks || []).length + " taken tegelijk" : String(i.task || "").slice(0, 160)) + "</span>"
+          : "<b>" + esc(name) + "</b>" + (rest.length ? "<span>" + esc(rest.join(" · ")) + "</span>" : "");
         if (!d) return '<div class="tool">' + head + "</div>";   // older replies: only the line
-        return '<details class="tool' + (d.sub ? " sub" : "") + '" data-id="' + esc(d.id || "") + '"><summary>' + head +
-          '</summary><div class="tool-more">' + toolInput(d.i || {}) + "</div></details>"; } },
+        return '<details class="tool' + (d.sub ? " sub" : "") + (kind ? " " + kind : "") + '" data-id="' + esc(d.id || "") + '"' +
+          (d.p ? ' data-p="' + esc(d.p) + '"' : "") + (d.t ? ' data-t="' + d.t + '"' : "") + "><summary>" + head + "</summary>" +
+          (kind === "agent" ? '<div class="team-kids"></div>' : "") + '<div class="tool-more">' + toolInput(i) + "</div></details>"; } },
     { name: "tout", level: "block", start: (s) => s.indexOf("⁣tout "),
       tokenizer(s) { const m = /^⁣tout ([^\n]*)(?:\n|$)/.exec(s); if (m) return { type: "tout", raw: m[0], text: m[1] }; },
       renderer(t) { let d = {}; try { d = JSON.parse(t.text); } catch {}
-        return '<div class="tout' + (d.err ? " err" : "") + '" data-id="' + esc(d.id || "") + '"><i>' + (d.err ? "FOUT" : "UITVOER") +
+        return '<div class="tout' + (d.err ? " err" : "") + '" data-id="' + esc(d.id || "") + '"' + (d.t ? ' data-t="' + d.t + '"' : "") + '><i>' + (d.err ? "FOUT" : "UITVOER") +
           "</i><pre>" + esc(String(d.o ?? "").trim() || "(leeg)") + "</pre></div>"; } },
     { name: "think", level: "block", start: (s) => s.indexOf("⁣think "),
       tokenizer(s) { const m = /^⁣think ([^\n]*)(?:\n|$)/.exec(s); if (m) return { type: "think", raw: m[0], text: m[1] }; },
@@ -942,12 +1009,33 @@ function toolInput(i) {
   return Object.entries(i).map(([k, v]) => "<div><i>" + esc(k.toUpperCase()) + "</i>" + val(v) + "</div>").join("");
 }
 // a tool's output arrives later in the text: move it into the details of its call
+const toolKind = (name) => /^(Agent|Task)$/.test(name) ? "agent" : /^mcp__hygra-local__/.test(name) ? "worker" : "";
 function nestTools(root) {
-  root.querySelectorAll(".tout[data-id]").forEach((o) => {
-    const more = o.dataset.id && root.querySelector('details.tool[data-id="' + CSS.escape(o.dataset.id) + '"] .tool-more');
-    if (more) more.appendChild(o);
+  // a subagent's steps go into the folder of the Agent call that started it (also several levels deep)
+  root.querySelectorAll("details.tool[data-p]").forEach((d) => {
+    const host = root.querySelector('details.agent[data-id="' + CSS.escape(d.dataset.p) + '"] > .team-kids');
+    if (host && d.parentElement !== host && !d.contains(host)) host.appendChild(d);
   });
-  root.querySelectorAll("details.tool").forEach((d) => d.classList.toggle("done", !!d.querySelector(".tout")));
+  root.querySelectorAll(".tout[data-id]").forEach((o) => {
+    const more = o.dataset.id && root.querySelector('details.tool[data-id="' + CSS.escape(o.dataset.id) + '"] > .tool-more');
+    if (more && o.parentElement !== more) more.appendChild(o);
+  });
+  root.querySelectorAll("details.tool").forEach((d) => d.classList.toggle("done", !!d.querySelector(":scope > .tool-more > .tout")));
+  agentMeta(root);
+}
+const fmtDur = (s) => s < 60 ? Math.round(s) + " s" : Math.floor(s / 60) + " min " + String(Math.round(s % 60)).padStart(2, "0");
+// per agent: bezig of klaar, hoelang, hoeveel stappen, en terwijl ze werkt haar laatste stap
+function agentMeta(root, live) {
+  root.querySelectorAll("details.agent").forEach((d) => {
+    const out = d.querySelector(":scope > .tool-more > .tout"), kids = d.querySelectorAll(":scope > .team-kids > details.tool");
+    const t0 = +d.dataset.t || 0, end = out ? +out.dataset.t || 0 : 0;
+    const running = !out && live !== false && d.closest(".bubble-bot") && !d.closest("[data-settled]");
+    d.classList.toggle("run", !!running); d.classList.toggle("err", !!(out && out.classList.contains("err")));
+    const last = kids.length && kids[kids.length - 1].querySelector("summary b");
+    const dur = t0 ? fmtDur(((end || (running ? Date.now() / 1000 : 0)) || t0) - t0) : "";
+    d.querySelector(":scope > summary em").textContent = [running ? "BEZIG" : out ? (out.classList.contains("err") ? "FOUT" : "KLAAR") : "",
+      dur, kids.length + (kids.length === 1 ? " stap" : " stappen"), running && last ? "nu: " + last.textContent : ""].filter(Boolean).join(" · ");
+  });
 }
 // copying a reply: without the invisible detail lines
 const plainText = (t) => t.replace(/^\u2063(?:tin|tout|think) .*(?:\n|$)/gm, "")
@@ -1097,7 +1185,7 @@ function renderUsage(l, model = "claude") {
 }
 function drawUsage() {
   const model = $("model").value, l = usage[model];
-  if (!isChatModel(model)) return;
+  if (!USAGE_NAME[model]) return;
   const plan = model === "claude" ? "PRO" : l && l.plan ? l.plan : "";
   $("usage-label").textContent = "GEBRUIK · " + USAGE_NAME[model] + (plan ? " " + plan : "");
   $("usage-refresh").title = model === "claude" ? "Vernieuwen (een piepkleine Haiku-vraag)" : "Vernieuwen (kost niets)";
@@ -1131,7 +1219,7 @@ function drawUsage() {
 }
 async function refreshUsage() {
   const b = $("usage-refresh"), model = $("model").value;
-  if (b.classList.contains("spin") || !isChatModel(model)) return;
+  if (b.classList.contains("spin") || !USAGE_NAME[model]) return;
   b.classList.add("spin");
   try { renderUsage(await api().limits(true, model), model); } catch {}
   b.classList.remove("spin");
@@ -1144,7 +1232,7 @@ function renderAll() {
   else if (!current || !current.turns.length) renderEmpty();
   else current.turns.forEach((t) => { addMe(t.prompt); if (t.pending) { $("log").append(t.pending.node); if (t.pending.kind === "claude") scheduleDraw(t.pending); } else addBot(t); });
   syncLoadCard(); scrollDown(); applyModel();
-  renderHistory();
+  renderHistory(); syncTeam();
   warmSoon();
 }
 
@@ -1186,6 +1274,7 @@ function addMe(text) {
 
 function botNode(model) {
   const n = $("t-bot").content.firstElementChild.cloneNode(true);
+  n.dataset.settled = "1";   // a finished turn; a live job removes this (claudeJob)
   n.querySelector(".av").replaceWith($(isChatModel(model) ? "t-avatar-" + model : "t-avatar-ncm").content.cloneNode(true));
   if (isChatModel(model)) n.querySelector(".bubble-bot").classList.add("claude");   // .claude = de chatstijl
   return n;
@@ -1204,7 +1293,7 @@ function fillBot(n, t, cwd) {
   foot.textContent = t.stopped ? "GESTOPT" + (t.seconds ? " · " + t.seconds.toFixed(1).replace(".", ",") + " s" : "")
     : t.imported ? "uit " + (current && current.source === "cowork" ? "Cowork" : "Claude Code")
     : isChatModel(t.model) && !t.error
-    ? (t.tokens_in || 0).toLocaleString("nl-BE") + " → " + (t.tokens_out || 0).toLocaleString("nl-BE") + " tokens · " + CHAT[t.model].cost + " · " + (t.seconds || 0).toFixed(1).replace(".", ",") + " s"
+    ? (t.tokens_in || 0).toLocaleString("nl-BE") + " → " + (t.tokens_out || 0).toLocaleString("nl-BE") + " tokens · " + CHAT[t.model].cost + (t.tok_s ? " · " + String(t.tok_s).replace(".", ",") + " tok/s" : "") + " · " + (t.seconds || 0).toFixed(1).replace(".", ",") + " s"
     : "";
   const lv = n.querySelector(".levels"), view = n.querySelector(".level-view");
   lv.replaceChildren();
@@ -1250,7 +1339,7 @@ const fmtTime = (j) => ((Date.now() - j.start) / 1000).toFixed(1).replace(".", "
 function tick() {
   for (const j of allJobs()) {
     const t = j.node.querySelector(".busy .time"); if (t) t.textContent = fmtTime(j);
-    if (j.kind === "claude") j.foot.textContent = j.state + " · " + fmtTime(j);
+    if (j.kind === "claude") { j.foot.textContent = j.state + " · " + fmtTime(j); if (j.body.querySelector("details.agent.run")) agentMeta(j.body); }
   }
   if (!allJobs().length) { clearInterval(clock); clock = null; }
 }
@@ -1338,7 +1427,7 @@ function syncLoadCard() {
 function syncFunky() {
   const on = $("funky").checked && shownJobs().length > 0;
   document.body.classList.toggle("funky", on);
-  document.body.classList.toggle("surfing", on && [...claudeJobs.values()].some((j) => j.model === "claude"));   // de vonk is van Claude
+  document.body.classList.toggle("surfing", on && shownJobs().some((j) => j.kind !== "load"));   // surfer, neon of blaadjes: bij elk model dat werkt
 }
 
 // taakbalk: bewegende "bezig"-balk op de knop zolang Claude of de GPU iets doet
@@ -1409,6 +1498,7 @@ function drawJob(j) {
   j.body.querySelectorAll("details.tool:not(.done)").forEach((d) => d.classList.add("run"));
   fresh.forEach((n) => n.nodeType === 1 && linkFiles(n, j.chat.cwd));
   if (stick) scrollDown();
+  if (j.chat === current) syncTeam(true);
 }
 const settled = new Map();   // bericht-id → afgewerkte job, voor wat Claude Code na het einde nog stuurt
 window.hygra = {
@@ -1473,7 +1563,8 @@ async function ask(chat, prompt, model) {
   const turn = { prompt, model, ...(isChatModel(model) && { label: MODEL_LABEL[model] }) }, t0 = Date.now();
   const job = isChatModel(model) ? claudeJob(chat, turn, (model === "claude" ? "m" : "x") + t0, t0, model)
     : { kind: "write", id: "g" + t0, model, chat, turn, t0, state: "BEZIG", node: busyCard("write") };
-  const recap = isChatModel(model) ? recapFor(chat, model) : "";
+  const recap = isChatModel(model) && model !== "local" ? recapFor(chat, model) : "";
+  const history = model === "local" ? historyOf(chat) : null;
   turn.pending = job; chat.turns.push(turn);
   startJob(job);
   if (chat === current) renderAll(); else renderHistory();
@@ -1488,7 +1579,7 @@ async function ask(chat, prompt, model) {
     } else if (isChatModel(model)) {
       // ChatGPT en Gemini: elk hun eigen gesprek per HyGra-gesprek (Codex-thread / Antigravity-conversatie)
       const sessions = chat.sessions ||= {};
-      r = await api().chat(model, sessions[model] || null, recap + prompt, job.id, chat.cwd || null);
+      r = await api().chat(model, sessions[model] || null, recap + prompt, job.id, chat.cwd || null, history);
       if (r.session) sessions[model] = r.session;
       delete r.session;
     } else {
@@ -1512,10 +1603,18 @@ function recapFor(chat, model) {
     + "\n\n[Nu mijn nieuwe bericht:]\n\n";
 }
 
+// het lokale model onthoudt zelf niets: het krijgt het hele gesprek tot nu, van alle modellen
+function historyOf(chat) {
+  return chat.turns.filter((t) => !t.pending && !t.error && (t.text || t.completion)).flatMap((t) => [
+    { role: "user", content: t.prompt },
+    { role: "assistant", content: isChatModel(t.model) ? plainText(t.text || "") : t.prompt + t.completion },
+  ]);
+}
+
 function claudeJob(chat, turn, id, t0, model = "claude") {
   const job = { kind: "claude", id, model, chat, turn, t0, text: "" };
   job.state = thinkWord(job);
-  job.node = botNode(model);
+  job.node = botNode(model); delete job.node.dataset.settled;
   job.node.querySelector(".what").textContent = MODEL_LABEL[model];
   job.body = job.node.querySelector(".body"); job.body.className = "body md"; job.body.innerHTML = '<span class="caret"></span>';
   job.foot = job.node.querySelector(".foot");
@@ -1538,7 +1637,7 @@ async function settle(job, r) {
   endJob(job);
   if (!r.stopped) api().flash().catch(() => {});   // taakbalkknop knippert als HyGra niet vooraan staat
   if (job.kind === "claude") {   // ook als het gesprek niet open staat: de node blijft voor later bewaard
-    fillBot(job.node, turn, chat.cwd); botCache.set(turn, job.node);
+    job.node.dataset.settled = "1"; fillBot(job.node, turn, chat.cwd); botCache.set(turn, job.node);
     settled.set(job.id, { turn, chat, node: job.node });
     setTimeout(() => settled.delete(job.id), 120000);
   }
@@ -1570,7 +1669,7 @@ function resumeClaude() {
 function applyModel() {
   // per model enkel wat erbij hoort: het Claude-gebruik bij Claude, temperatuur en lengte bij de lokale modellen
   $("local-opts").classList.toggle("hidden", isChat());
-  document.body.classList.toggle("no-usage", !isChat());
+  document.body.classList.toggle("no-usage", !USAGE_NAME[$("model").value]);   // lokale modellen hebben geen abonnement
   drawUsage();
   const ext = current && current.ext;
   $("prompt").placeholder = ext && current.source === "cowork" ? "Alleen lezen — typ om een nieuw gesprek te starten"
@@ -1638,13 +1737,65 @@ function initPick(sel) {
   label();
 }
 
+/* --- TEAM: alle agents van dit gesprek als een boom; klik om naar hun map in de chat te gaan --- */
+let teamWanted = null;   // null: volgt vanzelf (open zodra er agents zijn); true/false: jij koos
+try { const v = localStorage.getItem("hygra-team"); teamWanted = v === null ? null : v === "1"; } catch {}
+let teamTimer = 0;
+function syncTeam(soon) {
+  if (soon) { if (!teamTimer) teamTimer = setTimeout(() => { teamTimer = 0; syncTeam(); }, 250); return; }   // live: hoogstens 4x per seconde
+  const log = $("log"), groups = [];
+  log.querySelectorAll(".msg").forEach((m) => {
+    const tops = [...m.querySelectorAll("details.agent, details.worker")].filter((d) => !d.parentElement.closest("details.agent"));
+    if (tops.length) groups.push({ prompt: m.previousElementSibling && m.previousElementSibling.querySelector("pre")?.textContent || "", tops });
+  });
+  const all = log.querySelectorAll("details.agent, details.worker"), run = log.querySelectorAll("details.agent.run, details.worker:not(.done)");
+  const open = teamWanted === null ? all.length > 0 : teamWanted;
+  $("team").classList.toggle("hidden", !open);
+  $("team-btn").classList.toggle("on", open); $("team-btn").setAttribute("aria-expanded", String(open));
+  if (!open) return;
+  const agents = log.querySelectorAll("details.agent").length, workers = log.querySelectorAll("details.worker").length;
+  $("team-sum").textContent = !all.length ? "" : agents + (agents === 1 ? " agent" : " agents") + (workers ? " · " + workers + "x lokaal model" : "") + (run.length ? " · " + run.length + " bezig" : "");
+  const tree = $("team-tree");
+  if (!groups.length) { tree.innerHTML = '<p class="tempty">Nog geen agents in dit gesprek. Vraag Claude bv. om een taak met een agent-team aan te pakken, of om kleine taken naar het lokale model te sturen.</p>'; return; }
+  const node = (d) => {
+    const li = document.createElement("li"), b = document.createElement("button"), worker = d.classList.contains("worker");
+    const running = worker ? !d.classList.contains("done") && !d.closest("[data-settled]") : d.classList.contains("run");
+    b.type = "button"; b.className = "trow" + (worker ? " worker" : "") + (running ? " run" : d.classList.contains("err") ? " err" : " done");
+    const meta = d.querySelector(":scope > summary em");
+    b.innerHTML = "<i></i><b></b><small></small><span></span>";
+    b.querySelector("b").textContent = d.querySelector(":scope > summary b").textContent;
+    b.querySelector("small").textContent = meta ? meta.textContent.split(" · ").filter((x) => /\d/.test(x) && !x.startsWith("nu:")).slice(0, 1).join("") : running ? "bezig" : "";
+    b.querySelector("span").textContent = d.querySelector(":scope > summary span")?.textContent || "";
+    b.onclick = () => {   // de map en al haar ouders open, en ernaar scrollen
+      for (let x = d; x; x = x.parentElement.closest("details.agent")) x.open = true;
+      d.scrollIntoView({ block: "center", behavior: "smooth" });
+    };
+    li.append(b);
+    const kids = [...d.querySelectorAll(":scope > .team-kids > details.agent, :scope > .team-kids > details.worker")];
+    if (kids.length) { const ul = document.createElement("ul"); ul.append(...kids.map(node)); li.append(ul); }
+    return li;
+  };
+  tree.replaceChildren(...groups.flatMap((g) => {
+    const h = document.createElement("div"); h.className = "tturn"; h.textContent = "▸ " + g.prompt.split("\n")[0];
+    const ul = document.createElement("ul"); ul.append(...g.tops.map(node));
+    return [h, ul];
+  }));
+}
+function setTeam(open) {
+  teamWanted = open;
+  try { localStorage.setItem("hygra-team", open ? "1" : "0"); } catch {}
+  syncTeam();
+}
+$("team-btn").onclick = () => setTeam($("team").classList.contains("hidden"));
+$("team-close").onclick = () => setTeam(false);
+
 /* --- MODELLEN: welke modellen in de keuzelijst staan, en per chatmodel installeren, inloggen en uitloggen --- */
 let prov = null;                  // status per chatmodel (uit providers.py), null tot die er is
 let localModels = null;           // lokale modellen met een checkpoint, null tot torch geladen is
 const busyProv = new Set();       // modellen waarvoor een installeer- of inlogvenster open staat
 let modelsOff = new Set();        // door jou verborgen
 try { modelsOff = new Set(JSON.parse(localStorage.getItem("hygra-models-off")) || []); } catch {}
-const MODEL_NAME = { claude: "Claude", gpt: "ChatGPT", gemini: "Gemini", qwen: "Qwen-NCM", ncm: "NCM 34M" };
+const MODEL_NAME = { claude: "Claude", gpt: "ChatGPT", gemini: "Gemini", local: "Qwen3-Coder 30B", qwen: "Qwen-NCM", ncm: "NCM 34M" };
 const usable = (m) => isChatModel(m) ? !prov || !!(prov[m] && prov[m].ready) : !localModels || localModels.includes(m);
 
 // verbergt in de keuzelijst wat je uitzette of wat (nog) niet werkt; staat het gekozen model daar niet meer in, dan het eerste dat wel kan
@@ -1663,7 +1814,7 @@ async function loadProviders() {
   try { prov = await api().providers(); } catch { return; }
   busyProv.clear();
   hasClaude = !!prov.claude.installed;
-  for (const k of ["gpt", "gemini"]) {
+  for (const k of ["gpt", "gemini", "local"]) {
     const o = [...$("model").options].find((x) => x.value === k);
     if (o && prov[k].label) { o.textContent = prov[k].label; MODEL_LABEL[k] = prov[k].name; }
   }
@@ -1679,7 +1830,8 @@ function modelState(m) {
   if (!prov) return ["Status ophalen…", false];
   const p = prov[m];
   if (!p.installed) return [p.cli + " is niet geïnstalleerd", false];
-  if (!p.ready) return ["Niet ingelogd" + (p.detail ? " · " + p.detail : ""), false];
+  if (!p.ready) return [m === "local" ? p.detail || "Nog niet gedownload" : "Niet ingelogd" + (p.detail ? " · " + p.detail : ""), false];
+  if (m === "local") return ["Klaar · " + p.plan, true];
   return ["Ingelogd" + (p.account ? " · " + p.account : "") + (p.plan ? " · " + p.plan : "") + (p.model_name ? " · " + p.model_name : ""), true, p.warn];
 }
 
@@ -1710,6 +1862,7 @@ function renderModels() {
     if (isChatModel(m) && prov && prov[m]) {
       const p = prov[m];
       if (!p.installed) btn("INSTALLEREN", "install");
+      else if (m === "local") btn(p.ready ? "VERWIJDEREN" : "DOWNLOADEN (19 GB)", p.ready ? "logout" : "login", p.ready);   // geen account: een download
       else if (!p.ready) btn("INLOGGEN", "login");
       else { btn("ANDER ACCOUNT", "login", true); btn("UITLOGGEN", "logout", true); }
     }
@@ -1788,6 +1941,7 @@ document.addEventListener("keydown", (e) => {   // Ctrl+O, like the transcript v
   else if (k === ",") { e.preventDefault(); setPrefs($("prefs").classList.contains("hidden")); }
   else if (k === "o") { e.preventDefault(); $("verbose").checked = !$("verbose").checked; syncVerbose(); }
   else if (k === "b") { e.preventDefault(); setSide(!$("side").classList.contains("min")); }
+  else if (k === "t") { e.preventDefault(); setTeam($("team").classList.contains("hidden")); }
 });
 // instellingen: paneel onder de knop bij het logo (of ernaast als de zijbalk een rail is)
 function setPrefs(open) {

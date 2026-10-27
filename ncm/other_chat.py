@@ -2,6 +2,7 @@
 user's own (free) accounts, never an API key:
 - ChatGPT: the Codex CLI (`codex exec --json`), logged in with ChatGPT.
 - Gemini: the Antigravity CLI (`agy -p --output-format stream-json`), logged in with Google.
+- a local coding model (Qwen3-Coder 30B) through Ollama: no account, nothing leaves the laptop, no tools.
 
 Each HyGra chat keeps one conversation per model (Codex thread id / Antigravity conversation id); the
 next message resumes it. Like Claude in HyGra they get full access (no permission prompts). One process
@@ -13,6 +14,8 @@ import os
 import shutil
 import subprocess
 import threading
+import urllib.error
+import urllib.request
 import time
 from datetime import datetime
 
@@ -78,6 +81,7 @@ def models():
     if shutil.which("agy"):
         gid, name = gemini_model()
         out["gemini"] = {"label": f"{name} · Google", "name": name.upper(), "model": gid}
+    out["local"] = {"label": f"{LOCAL_NAME} · lokaal", "name": LOCAL_NAME.upper(), "model": LOCAL_MODEL}
     return out
 
 
@@ -250,8 +254,15 @@ def stop_reply(msg_id):
         p = _procs.get(msg_id)
         if p:
             _stopped.add(msg_id)
-    if p:
+    if p is None:
+        return
+    if hasattr(p, "pid"):
         stop(p.pid)
+    else:   # a local reply: closing the stream ends the generation in Ollama too
+        try:
+            p.close()
+        except OSError:
+            pass
 
 
 # ----- usage: how much of each account's limit is used, as {windows: [{k, label, used 0..1, resets unix}], at}
@@ -325,3 +336,104 @@ def limits(kind, refresh=False):
     if not refresh:
         return last_limits(kind)
     return codex_limits() if kind == "gpt" else gemini_limits()
+
+
+# ----- a local coding model through Ollama (http://127.0.0.1:11434): free, offline, no account
+OLLAMA = "http://127.0.0.1:11434"
+LOCAL_MODEL = "qwen3-coder:30b"   # 30B mixture-of-experts, ~3B active per token: fits 4 GB VRAM + RAM at usable speed
+LOCAL_NAME = "Qwen3-Coder 30B"
+LOCAL_CTX = 16384
+
+
+def ollama_exe():
+    return shutil.which("ollama") or next((p for p in [os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Ollama", "ollama.exe")]
+                                           if os.path.exists(p)), None)
+
+
+def _ollama(path, body=None, timeout=5):
+    req = urllib.request.Request(OLLAMA + path, data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Content-Type": "application/json"})
+    return urllib.request.urlopen(req, timeout=timeout)
+
+
+def ollama_up(start=True):
+    """True once the Ollama server answers; starts `ollama serve` in the background if it is installed but not running."""
+    try:
+        _ollama("/api/version", timeout=1).read()
+        return True
+    except OSError:
+        pass
+    exe = ollama_exe()
+    if not (start and exe):
+        return False
+    subprocess.Popen([exe, "serve"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     creationflags=NO_WINDOW | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+    for _ in range(40):
+        time.sleep(0.25)
+        try:
+            _ollama("/api/version", timeout=1).read()
+            return True
+        except OSError:
+            pass
+    return False
+
+
+def local_ready():
+    """Whether the model is downloaded (needs the server)."""
+    if not ollama_up():
+        return False
+    try:
+        tags = json.load(_ollama("/api/tags"))
+    except (OSError, ValueError):
+        return False
+    return any(m.get("name") == LOCAL_MODEL or m.get("model") == LOCAL_MODEL for m in tags.get("models") or [])
+
+
+def run_local(msg_id, history, prompt, on_text, on_status):
+    """One reply from the local model. It has no memory of its own: history ([{role, content}]) is the chat so far."""
+    if not ollama_up():
+        return {"error": "Ollama draait niet en kon niet gestart worden. Installeer het via MODELLEN BEHEREN."}
+    msgs = [{"role": "system", "content": SYSTEM}] + list(history or [])[-40:] + [{"role": "user", "content": prompt}]
+    on_status("denkt na")   # the first reply also loads ~19 GB from disk into memory
+    body = {"model": LOCAL_MODEL, "messages": msgs, "stream": True, "options": {"num_ctx": LOCAL_CTX}}
+    text, last = [], {}
+    try:
+        r = _ollama("/api/chat", body, timeout=600)
+    except urllib.error.HTTPError as e:
+        return {"error": e.read().decode(errors="replace") or str(e)}
+    except OSError as e:
+        return {"error": str(e)}
+    with _lock:
+        _procs[msg_id] = r
+    try:
+        for line in r:
+            if msg_id in _stopped:
+                break
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if e.get("error"):
+                return {"error": e["error"]}
+            piece = (e.get("message") or {}).get("content") or ""
+            if piece:
+                if not text:
+                    on_status("schrijft")
+                text.append(piece)
+                on_text(piece)
+            if e.get("done"):
+                last = e
+    except OSError:
+        pass   # closed by stop_reply
+    finally:
+        r.close()
+        with _lock:
+            _procs.pop(msg_id, None)
+            was_stopped = msg_id in _stopped
+            _stopped.discard(msg_id)
+    if was_stopped:
+        return {"stopped": True, "text": "".join(text)}
+    out = {"text": "".join(text).strip(), "tokens_in": last.get("prompt_eval_count") or 0, "tokens_out": last.get("eval_count") or 0}
+    if last.get("eval_duration"):
+        out["tok_s"] = round(out["tokens_out"] / (last["eval_duration"] / 1e9), 1)
+    return out

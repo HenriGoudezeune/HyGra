@@ -194,11 +194,13 @@ class Api:
         return res
 
     # ----- ChatGPT (Codex CLI) and Gemini (Antigravity CLI), with the user's own free accounts
-    def chat(self, kind, session, prompt, msg_id, cwd=None):
+    def chat(self, kind, session, prompt, msg_id, cwd=None, history=None):
         """A ChatGPT or Gemini reply, streamed like Claude's; returns the turn plus the model's conversation id.
         Afterwards the plan's usage follows on its own (hygra.usage), so the reply does not wait for it."""
-        res = self._stream(msg_id, lambda on_text: other_chat.run(
-            kind, msg_id, session, prompt, cwd, on_text, lambda s: self._js("status", msg_id, s)))
+        on_status = lambda s: self._js("status", msg_id, s)
+        if kind == "local":   # no account and no usage; it gets the chat so far, since it keeps no conversation itself
+            return self._stream(msg_id, lambda on_text: other_chat.run_local(msg_id, history, prompt, on_text, on_status))
+        res = self._stream(msg_id, lambda on_text: other_chat.run(kind, msg_id, session, prompt, cwd, on_text, on_status))
         threading.Thread(target=lambda: self._js("usage", kind, other_chat.limits(kind, True)), daemon=True).start()
         return res
 

@@ -9,6 +9,7 @@ import glob
 import json
 import os
 import re
+from datetime import datetime
 
 from ncm.claude_chat import me_line, result_line, think_line, tool_lines
 
@@ -18,6 +19,14 @@ COWORK = os.path.join(os.environ.get("APPDATA", HOME), "Claude", "local-agent-mo
 INDEX = os.path.join(os.environ.get("LOCALAPPDATA", HOME), "HyGra", "history.json")   # titles per transcript, by mtime
 
 _NOISE = ("<command-", "<local-command", "<system-reminder>", "Caveat:", "<task-notification>", "[Request interrupted")
+
+
+def _ts(e):
+    """An entry's timestamp as unix time (None if it has none), so tool steps keep their real durations."""
+    try:
+        return datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00")).timestamp()
+    except (KeyError, ValueError, AttributeError):
+        return None
 
 
 def _clean(text):
@@ -126,6 +135,7 @@ def load(path):
                 continue
             if e.get("isSidechain"):
                 continue
+            ts = _ts(e)
             if e.get("type") == "user":
                 t = _user_text(e)
                 if t:
@@ -136,14 +146,14 @@ def load(path):
                     if b.get("type") == "text" and b.get("text", "").strip():
                         cur["parts"].append(b["text"].strip())
                     elif b.get("type") == "tool_use":
-                        cur["parts"].append(tool_lines(b))
+                        cur["parts"].append(tool_lines(b, t=ts))
                     elif b.get("type") == "thinking" and b.get("thinking", "").strip():
                         cur["parts"].append(think_line(b["thinking"]))
             elif e.get("type") == "user" and cur is not None:   # tool output, for the details
                 c = e.get("message", {}).get("content")
                 for b in c if isinstance(c, list) else []:
                     if b.get("type") == "tool_result":
-                        cur["parts"].append(result_line(b))
+                        cur["parts"].append(result_line(b, t=ts))
             elif e.get("type") == "attachment" and cur is not None:   # a message sent while Claude was working
                 at = e.get("attachment") or {}
                 if at.get("type") == "queued_command" and isinstance(at.get("prompt"), str):
