@@ -761,10 +761,23 @@ function renderAll() {
   $("log").replaceChildren();
   if (current && current.loading) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "Gesprek laden…"; $("log").append(p); }
   else if (!current || !current.turns.length) renderEmpty();
-  else current.turns.forEach((t) => { addMe(t.prompt); if (t.pending) $("log").append(t.pending.node); else addBot(t); });
+  else current.turns.forEach((t) => { addMe(t.prompt); if (t.pending) { $("log").append(t.pending.node); if (t.pending.kind === "claude") scheduleDraw(t.pending); } else addBot(t); });
   syncLoadCard(); scrollDown(); applyModel();
   renderHistory();
+  warmSoon();
 }
+
+// het Claude Code-proces van dit gesprek alvast laten opstarten, zodat je volgende bericht meteen vertrekt
+let warmed = "", warmedAt = 0, warmTimer = 0;
+function warmCurrent() {
+  const c = current;
+  if (!c || !c.claudeSession || !isClaude() || !hasClaude || c.loading || (c.ext && c.source !== "code")) return;
+  const key = c.claudeSession + "|" + (c.cwd || "");
+  if (key === warmed && Date.now() - warmedAt < 60000) return;
+  warmed = key; warmedAt = Date.now();
+  api().claude_warm(c.claudeSession, c.cwd || null).catch(() => {});
+}
+function warmSoon() { clearTimeout(warmTimer); warmTimer = setTimeout(warmCurrent, 1500); }   // niet bij elk gesprek waar je langs klikt
 
 function renderEmpty() {
   if (isClaude() && !hasClaude) return showNoClaude();
@@ -833,7 +846,12 @@ function fillBot(n, t, cwd) {
   }
 }
 
-function addBot(t) { const n = botNode(t.model); fillBot(n, t, current && current.cwd); $("log").append(n); scrollDown(); }
+const botCache = new WeakMap();   // beurt → getekende node: Markdown, KaTeX en links maar één keer per antwoord
+function addBot(t) {
+  let n = t.model === "claude" && !t.error ? botCache.get(t) : null;
+  if (!n) { n = botNode(t.model); fillBot(n, t, current && current.cwd); if (t.model === "claude" && !t.error) botCache.set(t, n); }
+  $("log").append(n); scrollDown();
+}
 // follow new text only when you are already at the bottom, so you can scroll up while Claude writes
 function scrollDown(force = true) {
   const l = $("log");
@@ -943,29 +961,64 @@ window.progress = (c, k, n) => {   // vanuit Python na elk niveau
 };
 
 /* --- Claude-streaming (vanuit Python) --- */
+const htmlNodes = (html) => { const t = document.createElement("template"); t.innerHTML = html; return [...t.content.childNodes]; };
+const detailsIn = (nodes) => nodes.flatMap((n) => n.nodeType !== 1 ? [] : n.matches("details") ? [n, ...n.querySelectorAll("details")] : [...n.querySelectorAll("details")]);
+function scheduleDraw(j) { if (!j.raf) j.raf = requestAnimationFrame(() => drawJob(j)); }
+// streaming: finished blocks are drawn once; only the block Claude is still writing is redrawn, at most once per frame
+function drawJob(j) {
+  j.raf = 0;
+  if (!claudeJobs.has(j.id) || j.stopping || !j.node.isConnected) return;   // not on screen: catches up when it is
+  const stick = $("log").scrollHeight - $("log").scrollTop - $("log").clientHeight < 120;
+  if (j.cut == null) { j.cut = 0; j.live = []; j.body.replaceChildren(); }
+  const open = detailsIn(j.live).map((d) => d.open);   // keep the blocks you opened open while the text is redrawn
+  j.live.forEach((n) => n.remove());
+  const rest = j.text.slice(j.cut);
+  let toks = []; try { toks = marked.lexer(rest); } catch {}
+  // all blocks but the last are complete; cut only after a blank line, where nothing can still join the block before
+  let k = toks.length - 1; while (k > 0 && toks[k].type === "space") k--;
+  let ready = "", acc = "";
+  for (let i = 0; i < k; i++) { acc += toks[i].raw; if (acc.endsWith("\n\n")) ready = acc; }
+  let fresh = [];
+  if (ready && rest.startsWith(ready)) {
+    fresh = htmlNodes(markdown(ready));
+    j.body.append(...fresh); j.cut += ready.length;
+  }
+  j.live = htmlNodes(markdown(j.text.slice(j.cut)) + '<span class="caret"></span>');
+  j.body.append(...j.live);
+  detailsIn(fresh.concat(j.live)).forEach((d, i) => { if (open[i]) d.open = true; });
+  nestTools(j.body);
+  j.body.querySelectorAll("details.tool:not(.done)").forEach((d) => d.classList.add("run"));
+  fresh.forEach((n) => n.nodeType === 1 && linkFiles(n, j.chat.cwd));
+  if (stick) scrollDown();
+}
+const settled = new Map();   // bericht-id → afgewerkte job, voor wat Claude Code na het einde nog stuurt
 window.hygra = {
   delta(id, text) {
     const j = claudeJobs.get(id);
     if (!j || j.stopping) return;
-    const stick = j.node.isConnected && $("log").scrollHeight - $("log").scrollTop - $("log").clientHeight < 120;
-    // keep the code blocks you opened open while the text is redrawn
-    const open = [...j.body.querySelectorAll("details")].map((d) => d.open);
-    j.text += text;
+    j.text += text.replace(/\r/g, "");
     const tm = /\u2063tool ([^\s·]+)/.exec(text);   // which tool, in the status: WERKT · BASH
     if (tm) j.state = "WERKT · " + tm[1].replace(/^mcp__.*__/, "").toUpperCase();
     else if (!/^\n*\u2063/.test(text)) j.state = "SCHRIJFT";
     if (j.chat === current) refreshUi();
-    j.body.innerHTML = markdown(j.text) + '<span class="caret"></span>';
-    nestTools(j.body);
-    j.body.querySelectorAll("details.tool:not(.done)").forEach((d) => d.classList.add("run"));
-    linkFiles(j.body, j.chat.cwd);
-    j.body.querySelectorAll("details").forEach((d, k) => { if (open[k]) d.open = true; });
-    if (stick) scrollDown();
+    scheduleDraw(j);
   },
   status(id, s) {
     const j = claudeJobs.get(id);
     if (!j || j.stopping) return;
     j.state = s === "denkt na" ? thinkWord(j) : s === "werkt" ? "WERKT" : "SCHRIJFT"; refreshUi();
+  },
+  // after the reply was already done: usage, and rarely more text (Claude went on after a background task)
+  late(id, x) {
+    if (x.limits) renderUsage(x.limits);
+    if (!x.text) return;
+    const j = claudeJobs.get(id);
+    if (j) { j.lateText = (j.lateText || "") + x.text; return; }
+    const s = settled.get(id);
+    if (!s || s.turn.stopped || s.turn.error) return;
+    s.turn.text = (s.turn.text || "") + x.text;
+    if (s.node.isConnected) fillBot(s.node, s.turn, s.chat.cwd);
+    if (chats.includes(s.chat)) save();
   },
 };
 
@@ -995,7 +1048,7 @@ async function send(e) {
     if (model === "claude") {
       // één Claude Code-sessie per HyGra-gesprek; die onthoudt het gesprek zelf
       const first = !chat.claudeSession;
-      if (first) chat.claudeSession = newSessionId();
+      if (first) chat.claudeSession = await api().claude_spare().catch(() => newSessionId());
       if (chats.includes(chat)) save();   // het lopende antwoord overleeft zo het sluiten van de app
       r = await api().claude(chat.claudeSession, first, prompt, job.id, chat.cwd || null);
     } else {
@@ -1026,14 +1079,20 @@ async function settle(job, r) {
     if (r.stopped) r.text = job.text;   // wat er al stond, blijft staan
   }
   delete turn.pending;
+  if (job.raf) { cancelAnimationFrame(job.raf); job.raf = 0; }
+  if (job.lateText && r.text != null) r.text += job.lateText;
   if (r.limits) renderUsage(r.limits);
   delete r.limits;
   Object.assign(turn, r, { seconds: (Date.now() - job.t0) / 1000 });
   endJob(job);
   if (!r.stopped) api().flash().catch(() => {});   // taakbalkknop knippert als HyGra niet vooraan staat
+  if (job.kind === "claude") {   // ook als het gesprek niet open staat: de node blijft voor later bewaard
+    fillBot(job.node, turn, chat.cwd); botCache.set(turn, job.node);
+    settled.set(job.id, { turn, chat, node: job.node });
+    setTimeout(() => settled.delete(job.id), 120000);
+  }
   if (job.node.isConnected) {
-    if (job.kind === "claude") fillBot(job.node, turn, chat.cwd);
-    else { const n = botNode(job.model); fillBot(n, turn); job.node.replaceWith(n); }
+    if (job.kind !== "claude") { const n = botNode(job.model); fillBot(n, turn); job.node.replaceWith(n); }
     scrollDown(false);
   }
   if (chats.includes(chat)) { save(); renderHistory(); }
@@ -1117,20 +1176,23 @@ function initPick(sel) {
 }
 
 window.addEventListener("pywebviewready", async () => {
-  $("boot-msg").textContent = "MODELLEN LADEN…";
+  $("boot-msg").textContent = "OPSTARTEN…";
   try {
-    const info = await api().info();
-    deviceName = info.device.replace("NVIDIA GeForce ", "").replace(" Laptop GPU", "").toUpperCase();
     hasClaude = await api().has_claude();
     renderUsage(await api().limits(false));
-    [...$("model").options].forEach((o) => { if (o.value !== "claude" && !info.models.includes(o.value)) o.remove(); });
-    onModelChange();
     resumeClaude();
+    refreshUi();
     loadExternal();
   } finally {   // ook bij een fout: het laadscherm mag nooit blijven hangen
     $("boot").classList.add("gone");
     setTimeout(() => $("boot").remove(), 400);
   }
+  try {   // torch en de NCM-modellen laden intussen op de achtergrond
+    const info = await api().info();
+    deviceName = info.device.replace("NVIDIA GeForce ", "").replace(" Laptop GPU", "").toUpperCase();
+    [...$("model").options].forEach((o) => { if (o.value !== "claude" && !info.models.includes(o.value)) o.remove(); });
+  } catch {}
+  onModelChange();
 });
 $("model").onchange = onModelChange;
 initPick($("model"));
@@ -1158,6 +1220,7 @@ document.addEventListener("keydown", (e) => {   // Ctrl+O, like the transcript v
 });
 $("funky").onchange = () => { try { localStorage.setItem("hygra-funky", $("funky").checked ? "1" : "0"); } catch {} syncFunky(); };
 $("form").onsubmit = send;
+$("prompt").addEventListener("focus", warmCurrent);
 $("prompt").addEventListener("keydown", (e) => {   // Enter = versturen, Shift+Enter = nieuwe regel
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) send(e);
 });

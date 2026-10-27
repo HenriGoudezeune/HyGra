@@ -49,7 +49,6 @@ class Api:
         self._hwnd = None
         self._ready = threading.Event()
         self._booting = False
-        self._procs = {}                  # message id -> running Claude Code process (one per chat)
         self._stopped = set()             # message ids the user stopped
 
     def _start_boot(self):
@@ -61,7 +60,8 @@ class Api:
 
     def _boot(self):
         global torch, cut_function, load, load_decoder, next_chunk
-        claude_chat.tidy()
+        claude_chat.spare()   # the first new chat should not wait for Claude Code to start either
+        threading.Thread(target=claude_chat.tidy, daemon=True).start()
         try:
             import torch
             from eval_code import cut_function, load, load_decoder, next_chunk
@@ -109,35 +109,53 @@ class Api:
 
     def claude(self, session_id, first, prompt, msg_id, cwd=None):
         """Streams the reply into the page (hygra.delta / hygra.status) and returns the final turn.
-        Claude Code runs detached: if HyGra closes meanwhile, it finishes anyway and claude_attach picks it up."""
+        The chat's warm Claude Code process takes the message; it writes to a file, so if HyGra closes
+        meanwhile, it finishes anyway and claude_attach picks it up."""
         pid = claude_chat.start(msg_id, session_id, bool(first), prompt, cwd=cwd)
         if isinstance(pid, dict):
             return pid
-        self._procs[msg_id] = pid
         return self.claude_attach(msg_id)
 
+    def claude_spare(self):
+        """Session id for a new chat whose Claude Code process is already started."""
+        return claude_chat.spare()
+
+    def claude_warm(self, session_id, cwd=None):
+        """The page shows this chat: get its Claude Code process ready for the next message."""
+        threading.Thread(target=claude_chat.warm, args=(session_id, cwd), daemon=True).start()
+        return True
+
+    def _js(self, fn, *args):
+        if self._window:
+            self._window.evaluate_js(f"hygra.{fn}({', '.join(json.dumps(a) for a in args)})")
+
     def claude_attach(self, msg_id):
-        """Follows a reply that is running (or finished) as a job, from the start of its output."""
-        buf, last = [], [time.time()]
+        """Follows a reply that is running (or finished) as a job, from the start of its output.
+        Text goes to the page at most every 40 ms, and never sits in the buffer longer than that."""
+        buf, lock, live = [], threading.Lock(), threading.Event()
 
         def flush():
-            if buf and self._window:
-                self._window.evaluate_js(f"hygra.delta({json.dumps(msg_id)}, {json.dumps(''.join(buf))})")
+            with lock:
+                t = "".join(buf)
                 buf.clear()
-            last[0] = time.time()
+            if t:
+                self._js("delta", msg_id, t)
 
-        def on_text(t):
-            buf.append(t)
-            if time.time() - last[0] > 0.05:
+        def pump():
+            while not live.wait(0.04):
                 flush()
 
-        def on_status(s):
-            if self._window:
-                self._window.evaluate_js(f"hygra.status({json.dumps(msg_id)}, {json.dumps(s)})")
+        def on_text(t):
+            with lock:
+                buf.append(t)
 
-        res = claude_chat.follow(msg_id, on_text, on_status)
-        self._procs.pop(msg_id, None)
-        flush()
+        threading.Thread(target=pump, daemon=True).start()
+        try:
+            res = claude_chat.follow(msg_id, on_text, lambda s: self._js("status", msg_id, s),
+                                     lambda late: self._js("late", msg_id, late))
+        finally:
+            live.set()
+            flush()
         if msg_id in self._stopped:
             self._stopped.discard(msg_id)
             return {"stopped": True, "limits": res.get("limits")}
@@ -149,9 +167,8 @@ class Api:
     def stop(self, msg_id):
         """Stop button: ends that Claude reply, or the local completion that is running."""
         self._stopped.add(msg_id)
-        pid = self._procs.get(msg_id) or claude_chat.job_pid(msg_id)
-        if pid:
-            claude_chat.stop(pid)
+        if msg_id.startswith("m"):
+            claude_chat.stop_job(msg_id)
         return True
 
     def claude_done(self, msg_id):
@@ -335,3 +352,4 @@ if __name__ == "__main__":
     # not private: localStorage (funky mode, filters, ...) must survive a restart
     webview.start(private_mode=False,
                   storage_path=os.path.join(os.environ.get("LOCALAPPDATA", ROOT), "HyGra", "webview"))
+    claude_chat.shutdown()

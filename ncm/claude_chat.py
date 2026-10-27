@@ -10,8 +10,11 @@ Every chat is also a Remote Control session, so it shows up in the Claude mobile
 claude.ai/code: each reply asks the CLI for the bridge (the SDK's `remote_control` control
 request) and reattaches to the same remote session as the previous reply of that chat.
 
-Every reply runs as a detached job that writes its stream-json to a file under JOBS, not
-to a pipe: closing HyGra does not end it, and the next start follows the same file again.
+Each chat keeps a warm Claude Code process (see Worker) that waits on stdin for the next message,
+plus a spare one for the next new chat, so a message does not pay for Claude Code's startup. The
+process writes its stream-json to a file under JOBS, not to a pipe: closing HyGra only ends its stdin,
+so the reply it is on still finishes, and the next start follows the same file again. A reply is done
+for the page as soon as Claude ends its turn, without waiting for the turn summary or the exit.
 """
 import ctypes
 import glob
@@ -19,7 +22,9 @@ import json
 import os
 import shutil
 import subprocess
+import threading
 import time
+import uuid
 
 MODEL = "claude-opus-5-5"
 SYSTEM = ("Je draait in HyGra, een desktop-chatapp van HydrarGyrum, met volledige toegang tot de computer "
@@ -112,12 +117,6 @@ def last_limits():
         return None
 
 
-def refresh_limits():
-    """A tiny Haiku call, just to read the current usage windows."""
-    res = reply(None, True, "Antwoord met alleen: ok", lambda t: None, lambda s: None, model="claude-haiku-5-5")
-    return res.get("limits") or last_limits()
-
-
 def _remotes():
     try:
         with open(REMOTE, encoding="utf-8") as f:
@@ -191,131 +190,330 @@ def _meta(job_id):
         return None
 
 
+def _cmd(exe, model, session_id, first):
+    cmd = [exe, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
+           "--include-partial-messages", "--replay-user-messages",   # the echo tells where a reply starts
+           "--model", model, "--append-system-prompt", SYSTEM, "--dangerously-skip-permissions",
+           "--thinking-display", "summarized"]   # readable thinking summaries for DETAILS (hidden option)
+    return cmd + (["--no-session-persistence"] if session_id is None else ["--session-id" if first else "--resume", session_id])
+
+
+def _env():
+    # never fall back to paid API billing: only the subscription login may be used
+    return {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
+
+
+def _cwd(cwd):
+    return os.path.normcase(os.path.normpath(cwd if cwd and os.path.isdir(cwd) else WORKDIR))
+
+
+# ----- warm workers: Claude Code takes 1-2 s to start (more to load a long chat) and the Remote Control bridge
+# another half second, so each chat keeps its claude process waiting for the next message on stdin.
+# Its output still goes to a file: when HyGra closes, stdin ends and Claude Code finishes the reply it is on.
+MAX_WARM = 4           # warm processes at most (~300 MB each), the spare for a new chat included
+IDLE = 20 * 60         # an unused one goes after this many seconds
+
+
+class Worker:
+    def __init__(self, exe, session_id, first, cwd=None, model=MODEL):
+        self.id = f"w{time.time_ns()}"
+        self.dir = _dir(self.id)
+        self.out = os.path.join(self.dir, "out.jsonl")
+        self.session, self.cwd, self.model = session_id, _cwd(cwd), model
+        self.used, self.busy, self.rc = time.time(), None, False
+        os.makedirs(self.dir, exist_ok=True)
+        cmd = _cmd(exe, model, session_id, first)
+        with open(self.out, "wb") as out, open(os.path.join(self.dir, "err.txt"), "wb") as err:
+            kw = dict(cwd=self.cwd, env=_env(), stdin=subprocess.PIPE, stdout=out, stderr=err)
+            try:
+                self.proc = subprocess.Popen(cmd, creationflags=DETACH | BREAKAWAY, **kw)
+            except OSError:   # the job object HyGra runs in does not allow breaking away
+                self.proc = subprocess.Popen(cmd, creationflags=DETACH, **kw)
+        self.created = _created(self.proc.pid)
+        bridge = _remotes().get(session_id)
+        if bridge:   # an existing chat: back on its Remote Control session right away
+            self.remote(reattach_session_id=bridge)
+
+    def send(self, obj):
+        self.proc.stdin.write((json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8"))
+        self.proc.stdin.flush()
+
+    def remote(self, **how):
+        self.send({"type": "control_request", "request_id": f"rc{time.time_ns()}",
+                   "request": {"subtype": "remote_control", "enabled": True, "keep_session_on_exit": True, **how}})
+        self.rc = True
+
+    def alive(self):
+        return self.proc.poll() is None
+
+    def close(self):
+        """Ends stdin: Claude Code finishes what it is doing and exits by itself."""
+        try:
+            self.proc.stdin.close()
+        except OSError:
+            pass
+
+
+_pool = {}            # session id -> Worker
+_spare = [None]       # a worker for the next new chat, its session id chosen in advance
+_lock = threading.RLock()
+
+
+def _evict():
+    """Makes room for one more worker: closes the least recently used idle ones beyond MAX_WARM - 1."""
+    live = [w for w in _pool.values() if w.alive()] + ([_spare[0]] if _spare[0] and _spare[0].alive() else [])
+    idle = sorted((w for w in live if not w.busy and w is not _spare[0]), key=lambda w: w.used)
+    for w in idle[:max(0, len(live) - MAX_WARM + 1)]:
+        w.close()
+        _pool.pop(w.session, None)
+
+
+def _janitor():
+    while True:
+        time.sleep(60)
+        with _lock:
+            for sid, w in list(_pool.items()):
+                if not w.alive():
+                    _pool.pop(sid)
+                elif not w.busy and time.time() - w.used > IDLE:
+                    w.close()
+                    _pool.pop(sid)
+
+
+threading.Thread(target=_janitor, daemon=True).start()
+
+
+def warm(session_id, cwd=None):
+    """Starts (or keeps) a process for an existing chat, so its next message needs no startup."""
+    exe = shutil.which("claude")
+    if not exe or not session_exists(session_id):
+        return False
+    with _lock:
+        w = _pool.get(session_id)
+        if w and w.alive() and w.cwd == _cwd(cwd):
+            w.used = time.time()
+            return True
+        if w and w.busy:
+            return True
+        if w:
+            w.close()
+        _evict()
+        _pool[session_id] = Worker(exe, session_id, False, cwd)
+    return True
+
+
+def spare():
+    """The session id for a new chat: a process for it is already running (or starts now)."""
+    exe = shutil.which("claude")
+    with _lock:
+        w = _spare[0]
+        if not (w and w.alive()):
+            if not exe:
+                return str(uuid.uuid4())
+            _evict()
+            w = _spare[0] = Worker(exe, str(uuid.uuid4()), True)
+        return w.session
+
+
+def _refill(delay=4):
+    """A new spare once the reply that took the old one is under way (not to compete with its startup)."""
+    def go():
+        time.sleep(delay)
+        spare()
+    threading.Thread(target=go, daemon=True).start()
+
+
+def _take(exe, session_id, first, cwd, model=MODEL):
+    with _lock:
+        w = _spare[0]
+        if w and w.session == session_id and w.alive() and w.model == model:
+            _spare[0] = None
+            _refill()
+        else:
+            w = _pool.get(session_id)
+            if not (w and w.alive() and not w.busy and w.cwd == _cwd(cwd) and w.model == model):
+                if w:
+                    w.close()
+                _evict()
+                w = Worker(exe, session_id, first and not session_exists(session_id), cwd, model)
+        _pool[session_id] = w
+        w.used = time.time()
+        return w
+
+
 def start(job_id, session_id, first, prompt, model=MODEL, cwd=None):
-    """Starts Claude Code detached for one reply; returns its pid, or an error dict."""
+    """Hands one message to the chat's warm Claude Code process (starting one if needed); returns its pid, or an error dict."""
     exe = shutil.which("claude")
     if not exe:
         return {"error": "Claude Code (de 'claude'-opdracht) is niet gevonden. Installeer het en log in met je Pro-account."}
-    cmd = [exe, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-           "--include-partial-messages",
-           "--model", model, "--append-system-prompt", SYSTEM, "--dangerously-skip-permissions",
-           "--thinking-display", "summarized"]   # readable thinking summaries for DETAILS (hidden option)
-    cmd += ["--no-session-persistence"] if session_id is None else ["--session-id" if first else "--resume", session_id]
-    # never fall back to paid API billing: only the subscription login may be used
-    env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
     d = _dir(job_id)
     shutil.rmtree(d, ignore_errors=True)
     os.makedirs(d)
-    lines = []
-    if session_id is not None:   # also visible on the phone: open the Remote Control bridge first
-        rc = {"subtype": "remote_control", "enabled": True, "keep_session_on_exit": True}
-        bridge = _remotes().get(session_id)
-        if bridge:
-            rc["reattach_session_id"] = bridge
-        else:
-            rc["name"] = "HyGra · " + (" ".join(prompt.split())[:60] or "chat")
-        lines.append({"type": "control_request", "request_id": "rc", "request": rc})
-    lines.append({"type": "user", "message": {"role": "user", "content": prompt}})
-    with open(os.path.join(d, "in.jsonl"), "w", encoding="utf-8") as f:
-        f.writelines(json.dumps(x, ensure_ascii=False) + "\n" for x in lines)
-    with open(os.path.join(d, "in.jsonl"), "rb") as inp, open(os.path.join(d, "out.jsonl"), "wb") as out, \
-            open(os.path.join(d, "err.txt"), "wb") as err:
-        kw = dict(cwd=cwd if cwd and os.path.isdir(cwd) else WORKDIR, env=env, stdin=inp, stdout=out, stderr=err)
+    uid = str(uuid.uuid4())
+    for attempt in (0, 1):
+        w = _take(exe, session_id, first, cwd, model)
         try:
-            proc = subprocess.Popen(cmd, creationflags=DETACH | BREAKAWAY, **kw)
-        except OSError:   # the job object HyGra runs in does not allow breaking away
-            proc = subprocess.Popen(cmd, creationflags=DETACH, **kw)
-    meta = {"pid": proc.pid, "created": _created(proc.pid), "session": session_id, "started": time.time()}
+            offset = os.path.getsize(w.out)
+            if not w.rc:   # a new chat: open its Remote Control session, named after the first question
+                w.remote(name="HyGra · " + (" ".join(prompt.split())[:60] or "chat"))
+            w.send({"type": "user", "uuid": uid, "session_id": "", "parent_tool_use_id": None,
+                    "message": {"role": "user", "content": prompt}})
+            break
+        except OSError:   # the warm process died in the meantime: once more with a fresh one
+            with _lock:
+                if _pool.get(session_id) is w:
+                    _pool.pop(session_id)
+            if attempt:
+                return {"error": "Claude Code kon niet starten."}
+    w.busy = job_id
+    meta = {"pid": w.proc.pid, "created": w.created, "session": session_id, "started": time.time(),
+            "out": w.out, "offset": offset, "uuid": uid}
     with open(os.path.join(d, "meta.json"), "w", encoding="utf-8") as f:
         json.dump(meta, f)
-    return proc.pid
+    return w.proc.pid
 
 
-def _lines(job_id, meta):
-    """Yields the stream-json lines of a job from the start, waiting for new ones until Claude Code has exited."""
-    with open(os.path.join(_dir(job_id), "out.jsonl"), "rb") as f:
-        part = b""
+def _lines(path, meta, offset=0):
+    """Yields the stream-json lines of a job from offset, waiting for new ones until Claude Code has exited."""
+    with open(path, "rb") as f:
+        f.seek(offset)
+        part, idle = b"", 0
         while True:
             chunk = f.readline()
             if chunk:
                 part += chunk
+                idle = 0
                 if part.endswith(b"\n"):
                     yield part.decode("utf-8", "replace")
                     part = b""
                 continue
-            if not _alive(meta):   # exited: whatever is left in the file was written before that
+            if idle % 10 == 0 and not _alive(meta):   # exited: whatever is left was written before that
                 rest = part + f.read()
                 for line in rest.decode("utf-8", "replace").splitlines():
                     yield line
                 return
-            time.sleep(0.1)
+            idle += 1
+            time.sleep(0.02 if idle < 250 else 0.1)   # quick while text flows, calmer when Claude waits on a tool
 
 
-def follow(job_id, on_text, on_status):
+def _job_worker(meta):
+    with _lock:
+        return next((w for w in _pool.values() if w.out == meta.get("out")), None)
+
+
+def follow(job_id, on_text, on_status, on_late=None):
     """Streams a job's answer through on_text (always from the beginning, so a reattached page gets all of it);
-    returns the final text and token counts, or an error."""
+    returns the final text and token counts, or an error. The reply counts as done as soon as Claude ends its
+    turn; what Claude Code still sends after that (usage, the turn summary) goes to on_late in the background."""
     meta = _meta(job_id)
     if not meta:
         return {"error": "Dit antwoord is verloren gegaan (geen jobmap meer)."}
-    result, text, limits, new_block, thought = None, [], None, False, None
+    out = meta.get("out") or os.path.join(_dir(job_id), "out.jsonl")   # older jobs: their own out.jsonl
+    s = {"text": [], "limits": None, "new_block": False, "thought": None, "in": 0, "out": 0, "end": False,
+         "started": not meta.get("uuid")}
 
     def emit(t):
-        text.append(t)
+        s["text"].append(t)
         on_text(t)
 
-    for line in _lines(job_id, meta):
-        try:
-            e = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if e.get("type") == "stream_event":
+    def handle(e):
+        """One event; returns the result event that closes the turn."""
+        typ = e.get("type")
+        if typ == "control_response" and meta.get("session"):
+            r = e.get("response") or {}
+            if r.get("subtype") == "success" and (r.get("response") or {}).get("bridge_session_id"):
+                _remember_remote(meta["session"], r["response"]["bridge_session_id"])
+            return None
+        if not s["started"]:   # the tail of an earlier reply of this process: skip up to our own message
+            s["started"] = typ == "user" and e.get("uuid") == meta["uuid"]
+            return None
+        if typ == "stream_event":
             ev = e["event"]
-            if ev["type"] == "content_block_start":
+            main = not e.get("parent_tool_use_id")
+            if ev["type"] == "message_start" and main:
+                u = (ev.get("message") or {}).get("usage") or {}
+                s["in"] = sum(u.get(k) or 0 for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
+            elif ev["type"] == "message_delta" and main:
+                s["out"] += (ev.get("usage") or {}).get("output_tokens") or 0
+                if (ev.get("delta") or {}).get("stop_reason") not in (None, "tool_use", "pause_turn"):
+                    s["end"] = True
+            elif ev["type"] == "content_block_start":
                 kind = ev["content_block"]["type"]
                 on_status("denkt na" if kind == "thinking" else "werkt" if kind == "tool_use" else "schrijft")
-                new_block = kind == "text"
-                thought = [] if kind == "thinking" else None
+                s["new_block"] = kind == "text"
+                s["thought"] = [] if kind == "thinking" else None
             elif ev["type"] == "content_block_delta" and ev["delta"].get("type") == "text_delta":
-                if new_block and text and not text[-1].endswith("\n\n"):
+                if s["new_block"] and s["text"] and not s["text"][-1].endswith("\n\n"):
                     emit("\n\n")   # a new text block after a tool call starts a new paragraph
-                new_block = False
+                s["new_block"] = False
                 emit(ev["delta"]["text"])
-            elif ev["type"] == "content_block_delta" and ev["delta"].get("type") == "thinking_delta" and thought is not None:
-                thought.append(ev["delta"].get("thinking", ""))
-            elif ev["type"] == "content_block_stop" and thought is not None:
-                if "".join(thought).strip():
-                    emit(f"\n\n{think_line(''.join(thought))}\n\n")
-                thought = None
-        elif e.get("type") == "assistant":   # complete message: show each tool call as a line
+            elif ev["type"] == "content_block_delta" and ev["delta"].get("type") == "thinking_delta" and s["thought"] is not None:
+                s["thought"].append(ev["delta"].get("thinking", ""))
+            elif ev["type"] == "content_block_stop" and s["thought"] is not None:
+                if "".join(s["thought"]).strip():
+                    emit(f"\n\n{think_line(''.join(s['thought']))}\n\n")
+                s["thought"] = None
+        elif typ == "assistant":   # complete message: show each tool call as a line
             for b in e["message"].get("content", []):
                 if b.get("type") == "tool_use":
                     emit(f"\n\n{tool_lines(b, bool(e.get('parent_tool_use_id')))}\n\n")
-        elif e.get("type") == "user":   # tool output comes back as a user message
+        elif typ == "user":   # tool output comes back as a user message
             c = (e.get("message") or {}).get("content")
             for b in c if isinstance(c, list) else []:
                 if b.get("type") == "tool_result":
                     emit(f"\n{result_line(b)}\n\n")
-        elif e.get("type") == "control_response" and meta.get("session"):
-            r = e.get("response") or {}
-            if r.get("subtype") == "success" and (r.get("response") or {}).get("bridge_session_id"):
-                _remember_remote(meta["session"], r["response"]["bridge_session_id"])
-        elif e.get("type") == "rate_limit_event":
-            limits = _limits(e.get("rate_limit_info") or {})
-        elif e.get("type") == "result":
-            result = e
+        elif typ == "rate_limit_event":
+            s["limits"] = _limits(e.get("rate_limit_info") or {})
+        elif typ == "result":
+            return e
+        return None
+
+    def events():
+        for line in lines:
+            try:
+                yield json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+    def finished():
+        w = _job_worker(meta)
+        if w and w.busy == job_id:
+            w.busy = None
+            w.used = time.time()
+
+    lines = _lines(out, meta, meta.get("offset", 0))
+    result = None
+    for e in events():
+        result = handle(e)
+        if result or s["end"]:
+            break
+    if s["end"] and not result:   # done for the page; the rest of the turn is read on the side
+        early = len(s["text"])
+        finished()   # the next message may go in already: Claude Code queues it behind the summary
+
+        def rest():
+            for e in events():
+                if handle(e):
+                    break
+            extra = "".join(s["text"][early:])
+            if on_late and (s["limits"] or extra.strip()):
+                on_late({"limits": s["limits"], "text": extra if extra.strip() else None})
+        threading.Thread(target=rest, daemon=True).start()
+        return {"text": "".join(s["text"]), "tokens_in": s["in"], "tokens_out": s["out"], "limits": s["limits"]}
+    finished()
     if result is None:
         try:
-            with open(os.path.join(_dir(job_id), "err.txt"), encoding="utf-8", errors="replace") as f:
-                err = f.read().strip()
+            with open(os.path.join(os.path.dirname(out), "err.txt"), encoding="utf-8", errors="replace") as f:
+                err = f.read().strip()[-4000:]
         except OSError:
             err = ""
-        return {"error": err or "Claude Code stopte onverwacht.", "limits": limits}
+        return {"error": err or "Claude Code stopte onverwacht.", "limits": s["limits"]}
     if result.get("is_error"):
-        return {"error": result.get("result") or "Claude Code gaf een fout (gebruikslimiet bereikt?).", "limits": limits}
+        return {"error": result.get("result") or "Claude Code gaf een fout (gebruikslimiet bereikt?).", "limits": s["limits"]}
     u = result.get("usage") or {}
-    tokens_in = (u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0) + (u.get("cache_creation_input_tokens") or 0)
-    return {"text": "".join(text) or result.get("result") or "", "tokens_in": tokens_in,
-            "tokens_out": u.get("output_tokens") or 0, "limits": limits}
+    tokens_in = s["in"] or sum(u.get(k) or 0 for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
+    return {"text": "".join(s["text"]) or result.get("result") or "", "tokens_in": tokens_in,
+            "tokens_out": s["out"] or u.get("output_tokens") or 0, "limits": s["limits"]}
 
 
 def job_pid(job_id):
@@ -323,31 +521,100 @@ def job_pid(job_id):
     return meta["pid"] if meta and _alive(meta) else None
 
 
+def stop_job(job_id):
+    """Stop button: interrupts the reply but keeps the chat's process warm; kills it if it does not listen."""
+    meta = _meta(job_id)
+    if not meta or not _alive(meta):
+        return
+    w = _job_worker(meta)
+    if w and w.alive():
+        try:
+            w.send({"type": "control_request", "request_id": f"int{time.time_ns()}", "request": {"subtype": "interrupt"}})
+        except OSError:
+            w = None
+    if not w:   # a reply from before a restart: no stdin to talk to
+        stop(meta["pid"])
+        return
+
+    def check():
+        time.sleep(4)
+        if w.busy == job_id and w.alive():
+            stop(w.proc.pid)
+            with _lock:
+                if _pool.get(w.session) is w:
+                    _pool.pop(w.session)
+    threading.Thread(target=check, daemon=True).start()
+
+
 def done(job_id):
-    """The page has stored the reply: the job folder can go."""
+    """The page has stored the reply: the job folder can go, and the worker's output once nobody needs it."""
+    meta = _meta(job_id)
     shutil.rmtree(_dir(job_id), ignore_errors=True)
+    if meta and meta.get("out") and not _alive(meta):
+        _drop_worker_dir(os.path.dirname(meta["out"]))
+
+
+def _drop_worker_dir(wdir):
+    for m in glob.glob(os.path.join(JOBS, "*", "meta.json")):
+        try:
+            with open(m, encoding="utf-8") as f:
+                if os.path.normcase(os.path.dirname(json.load(f).get("out") or "")) == os.path.normcase(wdir):
+                    return   # another reply still reads from it
+        except (OSError, ValueError):
+            continue
+    shutil.rmtree(wdir, ignore_errors=True)
 
 
 def tidy(days=7):
-    """Removes job folders that no page will come back for: finished and older than a week."""
+    """Removes job folders no page will come back for (finished and older than a week), and the output
+    of warm processes from an earlier run once they have exited."""
     for d in glob.glob(os.path.join(JOBS, "*")):
-        meta = _meta(os.path.basename(d))
+        name = os.path.basename(d)
+        if name.startswith("w"):
+            continue
+        meta = _meta(name)
         started = meta.get("started", 0) if meta else os.path.getmtime(d)
         if time.time() - started > days * 86400 and not (meta and _alive(meta)):
             shutil.rmtree(d, ignore_errors=True)
+    with _lock:
+        mine = {os.path.normcase(w.dir) for w in list(_pool.values()) + [_spare[0]] if w}
+    for d in glob.glob(os.path.join(JOBS, "w*")):
+        if os.path.normcase(d) not in mine and time.time() - os.path.getmtime(d) > 60:
+            _drop_worker_dir(d)   # still open by a running claude: rmtree fails quietly, next time then
 
 
-def reply(session_id, first, prompt, on_text, on_status, model=MODEL, cwd=None, on_start=None, job_id=None):
-    """Starts a job and follows it to the end. on_start(pid): the caller can stop it with stop(pid)."""
-    own = job_id is None
-    job_id = job_id or f"tmp{time.time_ns()}"
-    pid = start(job_id, session_id, first, prompt, model, cwd)
-    if isinstance(pid, dict):
-        return pid
-    if on_start:
-        on_start(pid)
+def shutdown():
+    """HyGra closes: idle processes exit now, busy ones after their reply (their stdin ends either way)."""
+    with _lock:
+        for w in list(_pool.values()) + [_spare[0]]:
+            if w:
+                w.close()
+
+
+def refresh_limits():
+    """A tiny Haiku call, just to read the current usage windows (no tools or MCP servers, so it starts quickly)."""
+    exe = shutil.which("claude")
+    if not exe:
+        return last_limits()
+    cmd = [exe, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
+           "--model", "claude-haiku-5-5", "--no-session-persistence", "--strict-mcp-config", "--tools", ""]
+    p = subprocess.Popen(cmd, cwd=WORKDIR, env=_env(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                         stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
+    msg = {"type": "user", "message": {"role": "user", "content": "Antwoord met alleen: ok"}}
+    p.stdin.write((json.dumps(msg) + "\n").encode())
+    p.stdin.close()
+    found = None
     try:
-        return follow(job_id, on_text, on_status)
+        for line in p.stdout:
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if e.get("type") == "rate_limit_event":
+                found = _limits(e.get("rate_limit_info") or {})
+                break
+            if e.get("type") == "result":
+                break
     finally:
-        if own:
-            done(job_id)
+        p.kill()
+    return found or last_limits()
