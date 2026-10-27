@@ -151,6 +151,13 @@ body.verbose .md details.tool summary:hover span { color: var(--text); }
 .md .think i { color: var(--mustard); }
 .md .think p { margin: 4px 0 0; white-space: pre-wrap; }
 body:not(.verbose) .md .tool-more, body:not(.verbose) .md .think, .md > .tout { display: none; }
+/* a message you sent while Claude worked: inline where Claude took it in, and waiting under the reply until then */
+.md .me-mid { margin: 6px 0 12px; padding: 8px 12px; border-left: 4px solid var(--mustard); background: var(--olive-soft); }
+.md .me-mid i, .queued i { font-style: normal; font-size: 11px; letter-spacing: 2px; font-weight: 600; color: var(--mustard); }
+.md .me-mid p, .queued p { margin: 4px 0 0; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--text); }
+.queued { align-self: flex-end; display: flex; flex-direction: column; gap: 8px; max-width: 620px; }
+.queued > div { padding: 8px 14px; border: 2px dashed var(--mustard); background: rgba(242, 193, 78, .06); }
+.queued i::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 8px; background: var(--mustard); animation: blink .8s infinite steps(2); }
 body:not(.verbose) .md details.tool summary { pointer-events: none; }
 body.funky .md details.code { border-left-color: var(--f2); }
 .md strong { color: #FFF1CC; }
@@ -611,6 +618,10 @@ marked.use({
       tokenizer(s) { const m = /^⁣think ([^\n]*)(?:\n|$)/.exec(s); if (m) return { type: "think", raw: m[0], text: m[1] }; },
       renderer(t) { let x = ""; try { x = JSON.parse(t.text); } catch {}
         return '<div class="think"><i>DENKT</i><p>' + esc(String(x)) + "</p></div>"; } },
+    { name: "me", level: "block", start: (s) => s.indexOf("⁣me "),
+      tokenizer(s) { const m = /^⁣me ([^\n]*)(?:\n|$)/.exec(s); if (m) return { type: "me", raw: m[0], text: m[1] }; },
+      renderer(t) { let d = {}; try { d = JSON.parse(t.text); } catch {}
+        return '<div class="me-mid"><i>JIJ · TUSSENDOOR</i><p>' + esc(String(d.t ?? "")) + "</p></div>"; } },
     { name: "mathBlock", level: "block", start: (s) => s.search(/\$\$|\\\[/),
       tokenizer(s) { const m = /^\$\$([\s\S]+?)\$\$[^\S\n]*(?:\n|$)/.exec(s) || /^\\\[([\s\S]+?)\\\][^\S\n]*(?:\n|$)/.exec(s);
         if (m) return { type: "mathBlock", raw: m[0], text: m[1].trim() }; },
@@ -640,7 +651,9 @@ function nestTools(root) {
   root.querySelectorAll("details.tool").forEach((d) => d.classList.toggle("done", !!d.querySelector(".tout")));
 }
 // copying a reply: without the invisible detail lines
-const plainText = (t) => t.replace(/^\u2063(?:tin|tout|think) .*(?:\n|$)/gm, "").replace(/\u2063tool /g, "> ").replace(/\n{3,}/g, "\n\n");
+const plainText = (t) => t.replace(/^\u2063(?:tin|tout|think) .*(?:\n|$)/gm, "")
+  .replace(/^\u2063me (.*)$/gm, (_, j) => { try { return "> Jij: " + JSON.parse(j).t; } catch { return ""; } })
+  .replace(/\u2063tool /g, "> ").replace(/\n{3,}/g, "\n\n");
 
 /* --- bestanden in een antwoord: klikbaar, maar alleen als ze echt bestaan --- */
 const pathCache = new Map(), pathAsking = new Set();   // map + "|" + vermelding → volledig pad (of null)
@@ -937,8 +950,42 @@ function viewJob() {
 }
 function stopJob(j) {
   if (!j || j.stopping || j.kind === "load") return;
-  j.stopping = true; j.state = "STOPPEN"; refreshUi();
+  j.stopping = true; j.state = "STOPPEN";
+  putBack(j, (j.queued || []).map((q) => q.text));   // wat nog wachtte, komt terug in het invoerveld, zoals Esc in Claude Code
+  j.queued = []; drawQueue(j);
+  refreshUi();
   api().stop(j.id).catch(() => {});
+}
+function putBack(j, texts) {
+  if (!texts.length || j.chat !== current) return;
+  const p = $("prompt"); p.value = [...texts, p.value].filter((x) => x.trim()).join("\n\n"); p.focus();
+}
+
+/* --- tussendoor: een bericht terwijl Claude bezig is, zoals in Claude Code. Claude neemt het mee bij zijn volgende stap
+   (na een tool), of meteen na het antwoord als een eigen beurt die er nog bij hoort. --- */
+async function steer(j, text) {
+  const q = { text, uid: null };
+  (j.queued ||= []).push(q); drawQueue(j); scrollDown(false);
+  const uid = await api().claude_steer(j.id, text).catch(() => null);
+  if (uid) { q.uid = uid; drawQueue(j); return; }
+  j.queued = j.queued.filter((x) => x !== q); drawQueue(j);   // het antwoord was net klaar: dan wordt het gewoon je volgende bericht
+  if (j.stopping) return putBack(j, [text]);
+  (j.after ||= []).push(text);
+  if (j.settled) sendAfter(j);
+}
+function drawQueue(j) {
+  j.queued = (j.queued || []).filter((q) => !(q.uid && j.taken && j.taken.has(q.uid)));
+  let box = j.node.querySelector(".queued");
+  if (!j.queued.length) { if (box) box.remove(); return; }
+  if (!box) { box = document.createElement("div"); box.className = "queued"; j.node.querySelector(".foot").after(box); }
+  box.replaceChildren(...j.queued.map((q) => {
+    const d = document.createElement("div"), p = document.createElement("p");
+    d.innerHTML = "<i>WACHT OP CLAUDE</i>"; p.textContent = q.text; d.append(p); return d;
+  }));
+}
+function sendAfter(j) {
+  const text = (j.after || []).join("\n\n"); j.after = [];
+  if (text && (chats.includes(j.chat) || j.chat === current)) ask(j.chat, text, "claude");
 }
 
 function busyCard(kind) {
@@ -984,13 +1031,14 @@ function refreshUi() {
   syncFunky();
   syncTaskbar();
   const job = viewJob(), canStop = !!job && job.kind !== "load";   // tijdens het laden van een model: enkel wachten
+  const between = canStop && job.kind === "claude" && !job.stopping && !!$("prompt").value.trim();   // tekst getypt: tussendoor sturen
   const send = $("send");
   send.disabled = !!job && (!canStop || !!job.stopping);
-  send.querySelector(".i-send").style.display = job ? "none" : "";
+  send.querySelector(".i-send").style.display = job && !between ? "none" : "";
   send.querySelector(".i-wait").style.display = job && !canStop ? "" : "none";
-  send.querySelector(".i-stop").style.display = canStop ? "" : "none";
-  send.setAttribute("aria-label", canStop ? "Stop" : "Verstuur");
-  send.title = canStop ? "Stop" : "";
+  send.querySelector(".i-stop").style.display = canStop && !between ? "" : "none";
+  send.setAttribute("aria-label", between ? "Stuur tussendoor" : canStop ? "Stop" : "Verstuur");
+  send.title = between ? "Stuur tussendoor (Claude neemt het mee bij zijn volgende stap)" : canStop ? "Stop (Esc)" : "";
   $("status").classList.toggle("busy-pill", !!job);
   let s = job ? job.state
     : isClaude() ? (hasClaude ? "KLAAR · CLAUDE PRO" : "CLAUDE CODE ONTBREEKT")
@@ -1045,6 +1093,8 @@ window.hygra = {
     const j = claudeJobs.get(id);
     if (!j || j.stopping) return;
     j.text += text.replace(/\r/g, "");
+    for (const m of text.matchAll(/\u2063me (.*)/g)) { try { (j.taken ||= new Set()).add(JSON.parse(m[1]).u); } catch {} }
+    if (j.taken && j.queued && j.queued.length) drawQueue(j);
     const tm = /\u2063tool ([^\s·]+)/.exec(text);   // which tool, in the status: WERKT · BASH
     if (tm) j.state = "WERKT · " + tm[1].replace(/^mcp__.*__/, "").toUpperCase();
     else if (!/^\n*\u2063/.test(text)) j.state = "SCHRIJFT";
@@ -1077,20 +1127,29 @@ function newSessionId() {
 
 async function send(e) {
   e.preventDefault();
-  const prompt = $("prompt").value, model = $("model").value, lane = laneOf(model);
+  const prompt = $("prompt").value, model = $("model").value;
   const busy = viewJob();
-  if (busy) { if (e.type === "submit") stopJob(busy); return; }   // de knop is dan een stopknop; Enter doet niets
+  if (busy) {
+    if (busy.kind === "claude" && prompt.trim()) { if (!busy.stopping) { $("prompt").value = ""; steer(busy, prompt); refreshUi(); } }
+    else if (e.type === "submit") stopJob(busy);   // zonder tekst is de knop een stopknop; Enter doet dan niets
+    return;
+  }
   if (!prompt.trim()) return;
   if (model === "claude" && !hasClaude) return showNoClaude();
   if (current && (current.loading || (current.ext && (current.source !== "code" || model !== "claude")))) current = null;   // Cowork kan je alleen lezen
   if (!current) { current = { title: titleOf(prompt), turns: [] }; chats.unshift(current); }
-  current.updated = Date.now();
-  const chat = current, turn = { prompt, model }, t0 = Date.now();
+  $("prompt").value = "";
+  ask(current, prompt, model);
+}
+
+async function ask(chat, prompt, model) {
+  const lane = laneOf(model);
+  chat.updated = Date.now();
+  const turn = { prompt, model }, t0 = Date.now();
   const job = model === "claude" ? claudeJob(chat, turn, "m" + t0, t0) : { kind: "write", id: "g" + t0, model, chat, turn, t0, state: "BEZIG", node: busyCard("write") };
   turn.pending = job; chat.turns.push(turn);
-  $("prompt").value = "";
   startJob(job);
-  renderAll();
+  if (chat === current) renderAll(); else renderHistory();
   let r;
   try {
     if (model === "claude") {
@@ -1144,7 +1203,11 @@ async function settle(job, r) {
     scrollDown(false);
   }
   if (chats.includes(chat)) { save(); renderHistory(); }
-  if (job.kind === "claude") api().claude_done(job.id).catch(() => {});   // bewaard: de jobmap mag weg
+  if (job.kind === "claude") {
+    api().claude_done(job.id).catch(() => {});   // bewaard: de jobmap mag weg
+    job.settled = true; job.queued = []; drawQueue(job);
+    if (r.stopped || r.error) putBack(job, job.after || []); else sendAfter(job);
+  }
 }
 
 // na een herstart: Claude-antwoorden die doorliepen terwijl HyGra dicht was, opnieuw volgen (of het resultaat ophalen)
@@ -1282,9 +1345,11 @@ document.addEventListener("keydown", (e) => {   // Ctrl+O, like the transcript v
 $("funky").onchange = () => { try { localStorage.setItem("hygra-funky", $("funky").checked ? "1" : "0"); } catch {} syncFunky(); };
 $("form").onsubmit = send;
 $("prompt").addEventListener("focus", warmCurrent);
-$("prompt").addEventListener("keydown", (e) => {   // Enter = versturen, Shift+Enter = nieuwe regel
+$("prompt").addEventListener("keydown", (e) => {   // Enter = versturen (tussendoor als Claude bezig is), Shift+Enter = nieuwe regel, Esc = stop
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) send(e);
+  else if (e.key === "Escape" && viewJob()) { e.preventDefault(); stopJob(viewJob()); }
 });
+$("prompt").addEventListener("input", () => { if (viewJob()) refreshUi(); });
 $("hist-src").onclick = (e) => {
   const b = e.target.closest("button"); if (!b) return;
   histSrc = b.dataset.src; try { localStorage.setItem("hygra-hist", histSrc); } catch {}

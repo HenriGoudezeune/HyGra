@@ -46,6 +46,7 @@ TOOL = "⁣tool "    # invisible markers: the page draws such a line as a tool c
 TIN = "⁣tin "      # its input, its output (matched by tool id) and a thinking summary;
 TOUT = "⁣tout "    # all but the tool line itself only show with DETAILS on
 THINK = "⁣think "
+ME = "⁣me "        # a message you sent while the reply ran, where Claude took it in
 CLIP = 6000   # longest input value or output kept for the details
 
 
@@ -90,6 +91,12 @@ def result_line(b):
 
 def think_line(text):
     return f"{THINK}{json.dumps(text.strip(), ensure_ascii=False)}"
+
+
+def me_line(uid, content):
+    if isinstance(content, list):
+        content = "\n".join(x.get("text", "") for x in content if isinstance(x, dict) and x.get("type") == "text")
+    return f"{ME}{json.dumps({'u': uid, 't': str(content or '').strip()}, ensure_ascii=False)}"
 
 
 def available():
@@ -411,6 +418,8 @@ def follow(job_id, on_text, on_status, on_late=None):
     out = meta.get("out") or os.path.join(_dir(job_id), "out.jsonl")   # older jobs: their own out.jsonl
     s = {"text": [], "limits": None, "new_block": False, "thought": None, "in": 0, "out": 0, "end": False,
          "started": not meta.get("uuid")}
+    with _lock:   # messages sent during this reply that Claude Code has not taken in yet
+        pending = _steers.setdefault(job_id, set(meta.get("steer") or []))
 
     def emit(t):
         s["text"].append(t)
@@ -426,6 +435,12 @@ def follow(job_id, on_text, on_status, on_late=None):
             return None
         if not s["started"]:   # the tail of an earlier reply of this process: skip up to our own message
             s["started"] = typ == "user" and e.get("uuid") == meta["uuid"]
+            return None
+        if typ == "user" and e.get("uuid") in pending:   # a message sent meanwhile: Claude takes it in here
+            with _lock:
+                pending.discard(e["uuid"])
+            emit(f"\n\n{me_line(e['uuid'], (e.get('message') or {}).get('content'))}\n\n")
+            on_status("werkt")
             return None
         if typ == "stream_event":
             ev = e["event"]
@@ -476,20 +491,30 @@ def follow(job_id, on_text, on_status, on_late=None):
                 continue
 
     def finished():
-        w = _job_worker(meta)
-        if w and w.busy == job_id:
-            w.busy = None
-            w.used = time.time()
+        with _lock:
+            _steers.pop(job_id, None)
+            w = _job_worker(meta)
+            if w and w.busy == job_id:
+                w.busy = None
+                w.used = time.time()
+
+    def over():
+        """The turn ended; the reply too, unless a message sent during it still waits: its turn belongs to this reply."""
+        with _lock:
+            if pending:
+                return False
+            finished()   # from here on steer() refuses, so nothing new can slip in behind the end
+            return True
 
     lines = _lines(out, meta, meta.get("offset", 0))
     result = None
     for e in events():
         result = handle(e)
-        if result or s["end"]:
+        if (result or s["end"]) and over():
             break
+        result, s["end"] = None, False
     if s["end"] and not result:   # done for the page; the rest of the turn is read on the side
         early = len(s["text"])
-        finished()   # the next message may go in already: Claude Code queues it behind the summary
 
         def rest():
             for e in events():
@@ -516,6 +541,35 @@ def follow(job_id, on_text, on_status, on_late=None):
             "tokens_out": s["out"] or u.get("output_tokens") or 0, "limits": s["limits"]}
 
 
+_steers = {}   # job id -> uuids of messages sent during that reply that Claude Code has not taken in yet
+
+
+def steer(job_id, text):
+    """A message typed while the reply runs, as in Claude Code: it goes in at Claude's next step (after a tool
+    call), or right after the reply as a turn of its own that still belongs to it. Returns its uuid, or None
+    when the reply is already over (the page then sends it as a normal message)."""
+    meta = _meta(job_id)
+    with _lock:
+        w = meta and _job_worker(meta)
+        pending = _steers.get(job_id)
+        if not w or w.busy != job_id or not w.alive() or pending is None:
+            return None
+        uid = str(uuid.uuid4())
+        try:
+            w.send({"type": "user", "uuid": uid, "session_id": "", "parent_tool_use_id": None,
+                    "message": {"role": "user", "content": text}})
+        except OSError:
+            return None
+        pending.add(uid)
+        meta["steer"] = meta.get("steer", []) + [uid]   # a reattached page follows its turn too
+        try:
+            with open(os.path.join(_dir(job_id), "meta.json"), "w", encoding="utf-8") as f:
+                json.dump(meta, f)
+        except OSError:
+            pass
+    return uid
+
+
 def job_pid(job_id):
     meta = _meta(job_id)
     return meta["pid"] if meta and _alive(meta) else None
@@ -528,7 +582,12 @@ def stop_job(job_id):
         return
     w = _job_worker(meta)
     if w and w.alive():
-        try:
+        try:   # messages sent meanwhile go back to the page, not to Claude: withdraw them first, then interrupt
+            with _lock:
+                _steers.get(job_id, set()).clear()
+            for uid in meta.get("steer") or []:
+                w.send({"type": "control_request", "request_id": f"cq{time.time_ns()}",
+                        "request": {"subtype": "cancel_async_message", "message_uuid": uid}})
             w.send({"type": "control_request", "request_id": f"int{time.time_ns()}", "request": {"subtype": "interrupt"}})
         except OSError:
             w = None

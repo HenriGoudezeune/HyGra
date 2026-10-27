@@ -155,6 +155,10 @@ class Api:
             return pid
         return self.claude_attach(msg_id)
 
+    def claude_steer(self, msg_id, text):
+        """A message typed while that reply runs: Claude takes it in at its next step. None if the reply just ended."""
+        return claude_chat.steer(msg_id, text)
+
     def claude_spare(self):
         """Session id for a new chat whose Claude Code process is already started."""
         return claude_chat.spare()

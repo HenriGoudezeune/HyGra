@@ -10,7 +10,7 @@ import json
 import os
 import re
 
-from ncm.claude_chat import result_line, think_line, tool_lines
+from ncm.claude_chat import me_line, result_line, think_line, tool_lines
 
 HOME = os.path.expanduser("~")
 CODE = os.path.join(HOME, ".claude", "projects")
@@ -144,6 +144,10 @@ def load(path):
                 for b in c if isinstance(c, list) else []:
                     if b.get("type") == "tool_result":
                         cur["parts"].append(result_line(b))
+            elif e.get("type") == "attachment" and cur is not None:   # a message sent while Claude was working
+                at = e.get("attachment") or {}
+                if at.get("type") == "queued_command" and isinstance(at.get("prompt"), str):
+                    cur["parts"].append(me_line(at.get("source_uuid"), at["prompt"]))
     for t in turns:
         t["text"] = "\n\n".join(t.pop("parts")) or "(geen antwoord)"
     return turns
