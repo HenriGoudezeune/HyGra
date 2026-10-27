@@ -382,7 +382,7 @@ body.funky .hist-src button.on, body.funky .settings label.chip:has(input:checke
       </button>
     </div>
     <div class="cut-sm" style="background:var(--orange)">
-      <button class="new" id="new" title="Nieuw gesprek">
+      <button class="new" id="new" title="Nieuw gesprek (Ctrl+N)">
         <svg width="20" height="20" viewBox="0 0 22 22" aria-hidden="true"><path d="M11 1 L11 21 M1 11 L21 11 M4 4 L18 18 M18 4 L4 18" stroke="#2E3714" stroke-width="3" stroke-linecap="square"/></svg>
         <span>NIEUW GESPREK</span>
       </button>
@@ -1272,10 +1272,11 @@ function setSide(min) {   // zijbalk in- of uitklappen; blijft onthouden
 }
 try { setSide(localStorage.getItem("hygra-side") === "min"); } catch {}
 $("side-btn").onclick = () => setSide(!$("side").classList.contains("min"));
-document.addEventListener("keydown", (e) => {   // Ctrl+O, like the transcript view in Claude Code; Ctrl+B = zijbalk
+document.addEventListener("keydown", (e) => {   // Ctrl+O, like the transcript view in Claude Code; Ctrl+B = zijbalk; Ctrl+N = nieuw gesprek
   if (!e.ctrlKey || e.shiftKey || e.altKey) return;
   const k = e.key.toLowerCase();
-  if (k === "o") { e.preventDefault(); $("verbose").checked = !$("verbose").checked; syncVerbose(); }
+  if (k === "n") { e.preventDefault(); $("new").click(); }
+  else if (k === "o") { e.preventDefault(); $("verbose").checked = !$("verbose").checked; syncVerbose(); }
   else if (k === "b") { e.preventDefault(); setSide(!$("side").classList.contains("min")); }
 });
 $("funky").onchange = () => { try { localStorage.setItem("hygra-funky", $("funky").checked ? "1" : "0"); } catch {} syncFunky(); };
