@@ -10,12 +10,13 @@ import json
 import os
 import re
 
+from ncm.claude_chat import result_line, think_line, tool_lines
+
 HOME = os.path.expanduser("~")
 CODE = os.path.join(HOME, ".claude", "projects")
 COWORK = os.path.join(os.environ.get("APPDATA", HOME), "Claude", "local-agent-mode-sessions")
 INDEX = os.path.join(os.environ.get("LOCALAPPDATA", HOME), "HyGra", "history.json")   # titles per transcript, by mtime
 
-TOOL = "⁣tool "
 _NOISE = ("<command-", "<local-command", "<system-reminder>", "Caveat:", "<task-notification>", "[Request interrupted")
 
 
@@ -112,14 +113,6 @@ def sessions(skip=()):
     return out
 
 
-def _describe(inp):
-    for k in ("command", "file_path", "path", "pattern", "url", "query", "description", "prompt"):
-        if isinstance(inp.get(k), str) and inp[k].strip():
-            v = " ".join(inp[k].split())
-            return " · " + (v[:140] + "…" if len(v) > 140 else v)
-    return ""
-
-
 def load(path):
     """The conversation as HyGra turns: a prompt with Claude's answer (text and tool lines)."""
     if not any(os.path.abspath(path).startswith(os.path.abspath(r)) for r in (CODE, COWORK)):
@@ -143,7 +136,14 @@ def load(path):
                     if b.get("type") == "text" and b.get("text", "").strip():
                         cur["parts"].append(b["text"].strip())
                     elif b.get("type") == "tool_use":
-                        cur["parts"].append(f"{TOOL}{b.get('name')}{_describe(b.get('input') or {})}")
+                        cur["parts"].append(tool_lines(b))
+                    elif b.get("type") == "thinking" and b.get("thinking", "").strip():
+                        cur["parts"].append(think_line(b["thinking"]))
+            elif e.get("type") == "user" and cur is not None:   # tool output, for the details
+                c = e.get("message", {}).get("content")
+                for b in c if isinstance(c, list) else []:
+                    if b.get("type") == "tool_result":
+                        cur["parts"].append(result_line(b))
     for t in turns:
         t["text"] = "\n\n".join(t.pop("parts")) or "(geen antwoord)"
     return turns

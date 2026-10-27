@@ -32,7 +32,11 @@ DETACH = NO_WINDOW | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
 BREAKAWAY = 0x01000000   # CREATE_BREAKAWAY_FROM_JOB: survive even if HyGra itself runs inside a job object
 
 
-TOOL = "⁣tool "   # invisible marker: the page draws such a line as a tool call
+TOOL = "⁣tool "    # invisible markers: the page draws such a line as a tool call,
+TIN = "⁣tin "      # its input, its output (matched by tool id) and a thinking summary;
+TOUT = "⁣tout "    # all but the tool line itself only show with DETAILS on
+THINK = "⁣think "
+CLIP = 6000   # longest input value or output kept for the details
 
 
 def _describe(inp):
@@ -42,6 +46,40 @@ def _describe(inp):
             v = " ".join(inp[k].split())
             return " · " + (v[:140] + "…" if len(v) > 140 else v)
     return ""
+
+
+def _clip(v):
+    if isinstance(v, str):
+        return v if len(v) <= CLIP else v[:CLIP] + f"\n… ({len(v) - CLIP} tekens meer)"
+    if isinstance(v, dict):
+        return {k: _clip(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_clip(x) for x in v[:50]]
+    return v
+
+
+def tool_lines(b, sub=False):
+    """A tool_use block as the tool line plus its input; sub: called by a subagent."""
+    inp = b.get("input") or {}
+    detail = {"id": b.get("id"), "i": _clip(inp)}
+    if sub:
+        detail["sub"] = 1
+    return f"{TOOL}{b.get('name')}{_describe(inp)}\n{TIN}{json.dumps(detail, ensure_ascii=False)}"
+
+
+def result_line(b):
+    """A tool_result block as one line: its text output, matched to the call by id."""
+    c = b.get("content")
+    if isinstance(c, list):
+        c = "\n".join(x.get("text", "") if x.get("type") == "text" else "[afbeelding]" for x in c if isinstance(x, dict))
+    out = {"id": b.get("tool_use_id"), "o": _clip(c if isinstance(c, str) else json.dumps(c, ensure_ascii=False))}
+    if b.get("is_error"):
+        out["err"] = 1
+    return f"{TOUT}{json.dumps(out, ensure_ascii=False)}"
+
+
+def think_line(text):
+    return f"{THINK}{json.dumps(text.strip(), ensure_ascii=False)}"
 
 
 def available():
@@ -132,7 +170,8 @@ def start(job_id, session_id, first, prompt, model=MODEL, cwd=None):
     if not exe:
         return {"error": "Claude Code (de 'claude'-opdracht) is niet gevonden. Installeer het en log in met je Pro-account."}
     cmd = [exe, "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-           "--model", model, "--append-system-prompt", SYSTEM, "--dangerously-skip-permissions"]
+           "--model", model, "--append-system-prompt", SYSTEM, "--dangerously-skip-permissions",
+           "--thinking-display", "summarized"]   # readable thinking summaries for DETAILS (hidden option)
     cmd += ["--no-session-persistence"] if session_id is None else ["--session-id" if first else "--resume", session_id]
     # never fall back to paid API billing: only the subscription login may be used
     env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
@@ -180,7 +219,7 @@ def follow(job_id, on_text, on_status):
     meta = _meta(job_id)
     if not meta:
         return {"error": "Dit antwoord is verloren gegaan (geen jobmap meer)."}
-    result, text, limits, new_block = None, [], None, False
+    result, text, limits, new_block, thought = None, [], None, False, None
 
     def emit(t):
         text.append(t)
@@ -197,15 +236,27 @@ def follow(job_id, on_text, on_status):
                 kind = ev["content_block"]["type"]
                 on_status("denkt na" if kind == "thinking" else "werkt" if kind == "tool_use" else "schrijft")
                 new_block = kind == "text"
+                thought = [] if kind == "thinking" else None
             elif ev["type"] == "content_block_delta" and ev["delta"].get("type") == "text_delta":
                 if new_block and text and not text[-1].endswith("\n\n"):
                     emit("\n\n")   # a new text block after a tool call starts a new paragraph
                 new_block = False
                 emit(ev["delta"]["text"])
+            elif ev["type"] == "content_block_delta" and ev["delta"].get("type") == "thinking_delta" and thought is not None:
+                thought.append(ev["delta"].get("thinking", ""))
+            elif ev["type"] == "content_block_stop" and thought is not None:
+                if "".join(thought).strip():
+                    emit(f"\n\n{think_line(''.join(thought))}\n\n")
+                thought = None
         elif e.get("type") == "assistant":   # complete message: show each tool call as a line
             for b in e["message"].get("content", []):
                 if b.get("type") == "tool_use":
-                    emit(f"\n\n{TOOL}{b['name']}{_describe(b.get('input') or {})}\n\n")
+                    emit(f"\n\n{tool_lines(b, bool(e.get('parent_tool_use_id')))}\n\n")
+        elif e.get("type") == "user":   # tool output comes back as a user message
+            c = (e.get("message") or {}).get("content")
+            for b in c if isinstance(c, list) else []:
+                if b.get("type") == "tool_result":
+                    emit(f"\n{result_line(b)}\n\n")
         elif e.get("type") == "rate_limit_event":
             limits = _limits(e.get("rate_limit_info") or {})
         elif e.get("type") == "result":
