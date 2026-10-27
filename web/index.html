@@ -780,6 +780,10 @@ function scrollDown(force = true) {
   if (force || l.scrollHeight - l.scrollTop - l.clientHeight < 120) l.scrollTop = l.scrollHeight;
 }
 
+// de echte spinner-woorden van Claude Code (uit claude.exe gehaald): één per antwoord, zoals in de terminal
+const CLAUDE_VERBS = ["Accomplishing", "Actioning", "Actualizing", "Architecting", "Baking", "Beaming", "Beboppin'", "Befuddling", "Billowing", "Blanching", "Bloviating", "Boogieing", "Boondoggling", "Booping", "Bootstrapping", "Brewing", "Bunning", "Burrowing", "Calculating", "Caramelizing", "Cascading", "Catapulting", "Cerebrating", "Channeling", "Choreographing", "Churning", "Clauding", "Coalescing", "Cogitating", "Combobulating", "Composing", "Computing", "Concocting", "Considering", "Contemplating", "Cooking", "Crafting", "Creating", "Crunching", "Crystallizing", "Cultivating", "Deciphering", "Deliberating", "Determining", "Dilly-dallying", "Discombobulating", "Doing", "Doodling", "Drizzling", "Ebbing", "Effecting", "Elucidating", "Embellishing", "Enchanting", "Envisioning", "Fermenting", "Fiddle-faddling", "Finagling", "Flambéing", "Flibbertigibbeting", "Flowing", "Flummoxing", "Fluttering", "Forging", "Forming", "Frolicking", "Frosting", "Gallivanting", "Galloping", "Garnishing", "Generating", "Gesticulating", "Germinating", "Gitifying", "Grooving", "Gusting", "Harmonizing", "Hashing", "Hatching", "Herding", "Honking", "Hullaballooing", "Hyperspacing", "Ideating", "Imagining", "Improvising", "Incubating", "Inferring", "Infusing", "Ionizing", "Jitterbugging", "Julienning", "Kerfuffling", "Kneading", "Leavening", "Levitating", "Lollygagging", "Manifesting", "Marinating", "Meandering", "Metamorphosing", "Misting", "Moonwalking", "Moseying", "Mulling", "Mustering", "Nebulizing", "Nesting", "Newspapering", "Noodling", "Nucleating", "Onioning", "Orbiting", "Orchestrating", "Osmosing", "Perambulating", "Percolating", "Perusing", "Philosophizing", "Photosynthesizing", "Polishing", "Pollinating", "Pondering", "Pontificating", "Pouncing", "Precipitating", "Prestidigitating", "Processing", "Proofing", "Propagating", "Puttering", "Puzzling", "Quantumizing", "Razzle-dazzling", "Razzmatazzing", "Recombobulating", "Reticulating", "Roosting", "Ruminating", "Sautéing", "Scampering", "Schlepping", "Scurrying", "Seasoning", "Shenaniganing", "Shimmying", "Simmering", "Skedaddling", "Sketching", "Slithering", "Smooshing", "Sock-hopping", "Spelunking", "Spinning", "Sprouting", "Stewing", "Sublimating", "Swirling", "Swooping", "Symbioting", "Synthesizing", "Tempering", "Thinking", "Thundering", "Tinkering", "Tomfoolering", "Topsy-turvying", "Transfiguring", "Transmogrifying", "Transmuting", "Twisting", "Undulating", "Unfurling", "Unraveling", "Vibing", "Waddling", "Wandering", "Warping", "Whatchamacalliting", "Whirlpooling", "Whirring", "Whisking", "Wibbling", "Working", "Wrangling", "Zesting", "Zigzagging"];
+const thinkWord = (j) => (j.verb ||= CLAUDE_VERBS[Math.floor(Math.random() * CLAUDE_VERBS.length)]).toUpperCase() + "…";
+
 /* --- lopend werk: per baan (Claude / GPU) één taak, en je kan intussen vrij wisselen --- */
 const fmtTime = (j) => ((Date.now() - j.start) / 1000).toFixed(1).replace(".", ",") + " s";
 function tick() {
@@ -895,7 +899,7 @@ window.hygra = {
   status(id, s) {
     const j = claudeJobs.get(id);
     if (!j || j.stopping) return;
-    j.state = s === "denkt na" ? "DENKT NA" : s === "werkt" ? "WERKT" : "SCHRIJFT"; refreshUi();
+    j.state = s === "denkt na" ? thinkWord(j) : s === "werkt" ? "WERKT" : "SCHRIJFT"; refreshUi();
   },
 };
 
@@ -939,7 +943,8 @@ async function send(e) {
 }
 
 function claudeJob(chat, turn, id, t0) {
-  const job = { kind: "claude", id, model: "claude", chat, turn, t0, text: "", state: "DENKT NA" };
+  const job = { kind: "claude", id, model: "claude", chat, turn, t0, text: "" };
+  job.state = thinkWord(job);
   job.node = botNode("claude");
   job.node.querySelector(".what").textContent = "CLAUDE OPUS 5.5";
   job.body = job.node.querySelector(".body"); job.body.className = "body md"; job.body.innerHTML = '<span class="caret"></span>';
