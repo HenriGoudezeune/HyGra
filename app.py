@@ -22,6 +22,22 @@ os.chdir(ROOT)
 sys.path.insert(0, ROOT)
 
 SIZE = (1280, 860)
+LOG = os.path.join(os.environ.get("LOCALAPPDATA", ROOT), "HyGra", "hygra.log")
+if sys.stderr is None:   # pythonw has no console: keep warnings and tracebacks (this run and the one before)
+    os.makedirs(os.path.dirname(LOG), exist_ok=True)
+    try:
+        os.replace(LOG, LOG[:-4] + ".prev.log")
+    except OSError:
+        pass
+    sys.stderr = sys.stdout = open(LOG, "a", encoding="utf-8", buffering=1)
+T0 = time.time()
+
+
+def log(msg):
+    print(f"{time.strftime('%H:%M:%S')} +{time.time() - T0:5.1f}s  {msg}", file=sys.stderr, flush=True)
+
+
+log("start")
 splash = None
 if __name__ == "__main__" and sys.platform == "win32":
     # before anything heavy: own taskbar group + icon instead of Python's, and the loading screen at once
@@ -63,11 +79,17 @@ class Api:
         claude_chat.spare()   # the first new chat should not wait for Claude Code to start either
         threading.Thread(target=claude_chat.tidy, daemon=True).start()
         try:
+            log(f"cuda driver {'ready' if _cuda_init() else 'missing'}")
             import torch
             from eval_code import cut_function, load, load_decoder, next_chunk
             from ncm.data import get_encoder
             self.dev = "cuda" if torch.cuda.is_available() else "cpu"
             self.enc = get_encoder("data")
+            log(f"torch ready on {self.dev}")
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            raise
         finally:   # never leave the page waiting; a failure then shows up as an error in info()
             self._ready.set()
 
@@ -250,6 +272,17 @@ class _Stopped(Exception):
     pass
 
 
+def _cuda_init():
+    """Starts the NVIDIA driver (waking the laptop GPU) through ctypes, which lets go of the GIL meanwhile.
+    torch.cuda does the same while holding it: 2 s with the GPU awake, far longer when it was asleep. The
+    window's UI thread needs the GIL for every call from the page, so after 5 s Windows declared HyGra hung and
+    swapped in a ghost window, which shows WebView2 as black. Afterwards torch finds the driver ready (0 s)."""
+    try:
+        return ctypes.WinDLL("nvcuda.dll").cuInit(0) == 0
+    except OSError:   # no NVIDIA driver: torch stays on the CPU
+        return False
+
+
 def _flash_taskbar(hwnd):
     """FlashWindowEx: the taskbar button blinks orange until the window comes to the front."""
     class FLASHWINFO(ctypes.Structure):
@@ -326,6 +359,7 @@ def reveal(window, api):
     """The page has loaded in the hidden window: put it exactly where the splash is, show it underneath
     the splash, give WebView2 a few frames to paint, then drop the splash. Only then start the heavy
     boot (torch holds the GIL and would stall the swap)."""
+    log("page loaded")
     if splash:
         time.sleep(0.1)   # first paint of the page (fonts, #boot)
         rect = splash.rect()
@@ -336,6 +370,7 @@ def reveal(window, api):
     if splash:
         time.sleep(0.3)
         splash.close()
+    log("window shown")
     api._start_boot()
 
 
