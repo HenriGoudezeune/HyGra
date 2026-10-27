@@ -482,8 +482,10 @@ let onGpu = null, clock = null;
 const laneOf = (model) => model === "claude" ? "claude" : "gpu";
 
 function loadChats() { try { return JSON.parse(localStorage.getItem("hygra-chats")) || []; } catch { return []; } }
+// een lopend Claude-antwoord gaat mee als { running: id }: dat draait los van de app door en wordt bij de volgende start weer gevolgd
+const keepTurn = (t) => !t.pending ? t : t.pending.kind === "claude" ? { prompt: t.prompt, model: t.model, running: t.pending.id, t0: t.pending.t0 } : null;
 function save() {
-  const done = chats.slice(0, 40).map((c) => ({ ...c, turns: c.turns.filter((t) => !t.pending) }));
+  const done = chats.slice(0, 40).map((c) => ({ ...c, turns: c.turns.map(keepTurn).filter(Boolean) }));
   try { localStorage.setItem("hygra-chats", JSON.stringify(done)); } catch {}
 }
 function titleOf(text) {
@@ -788,7 +790,7 @@ function tick() {
   if (!allJobs().length) { clearInterval(clock); clock = null; }
 }
 function startJob(job) {
-  job.start = Date.now();
+  job.start = job.t0 || Date.now();
   if (job.kind === "claude") claudeJobs.set(job.id, job); else lanes.gpu = job;
   if (!clock) clock = setInterval(tick, 100);
   refreshUi();
@@ -913,16 +915,7 @@ async function send(e) {
   if (!current) { current = { title: titleOf(prompt), turns: [] }; chats.unshift(current); }
   current.updated = Date.now();
   const chat = current, turn = { prompt, model }, t0 = Date.now();
-  const job = { kind: model === "claude" ? "claude" : "write", id: (model === "claude" ? "m" : "g") + t0, model, chat, turn };
-  if (model === "claude") {
-    job.text = ""; job.state = "DENKT NA";
-    job.node = botNode("claude");
-    job.node.querySelector(".what").textContent = "CLAUDE OPUS 5.5";
-    job.body = job.node.querySelector(".body"); job.body.className = "body md"; job.body.innerHTML = '<span class="caret"></span>';
-    job.foot = job.node.querySelector(".foot");
-  } else {
-    job.state = "BEZIG"; job.node = busyCard("write");
-  }
+  const job = model === "claude" ? claudeJob(chat, turn, "m" + t0, t0) : { kind: "write", id: "g" + t0, model, chat, turn, t0, state: "BEZIG", node: busyCard("write") };
   turn.pending = job; chat.turns.push(turn);
   $("prompt").value = "";
   startJob(job);
@@ -933,28 +926,60 @@ async function send(e) {
       // één Claude Code-sessie per HyGra-gesprek; die onthoudt het gesprek zelf
       const first = !chat.claudeSession;
       if (first) chat.claudeSession = newSessionId();
+      if (chats.includes(chat)) save();   // het lopende antwoord overleeft zo het sluiten van de app
       r = await api().claude(chat.claudeSession, first, prompt, job.id, chat.cwd || null);
-      if ((r.error || r.stopped) && first && !(await api().has_session(chat.claudeSession))) delete chat.claudeSession;   // de sessie is nooit gestart
-      if (r.stopped) r.text = job.text;   // wat er al stond, blijft staan
     } else {
       r = await api().complete(prompt, model, +$("temp").value, +$("chunks").value, job.id);
       if (!r.error) { onGpu = model; failed.delete(model); }
     }
   } catch (err) { r = { error: String(err) }; }
+  await settle(job, r);
+  if (model === "claude") loadExternal();   // een verdergezet Code-gesprek schuift naar boven
+  if (lane === "gpu") warm();
+}
+
+function claudeJob(chat, turn, id, t0) {
+  const job = { kind: "claude", id, model: "claude", chat, turn, t0, text: "", state: "DENKT NA" };
+  job.node = botNode("claude");
+  job.node.querySelector(".what").textContent = "CLAUDE OPUS 5.5";
+  job.body = job.node.querySelector(".body"); job.body.className = "body md"; job.body.innerHTML = '<span class="caret"></span>';
+  job.foot = job.node.querySelector(".foot");
+  return job;
+}
+
+// een taak is klaar: het resultaat in de beurt zetten, tonen en bewaren
+async function settle(job, r) {
+  const { chat, turn } = job;
+  if (job.kind === "claude") {
+    if ((r.error || r.stopped) && chat.claudeSession && !(await api().has_session(chat.claudeSession).catch(() => true))) delete chat.claudeSession;   // de sessie is nooit gestart
+    if (r.stopped) r.text = job.text;   // wat er al stond, blijft staan
+  }
   delete turn.pending;
   if (r.limits) renderUsage(r.limits);
   delete r.limits;
-  Object.assign(turn, r, { seconds: (Date.now() - t0) / 1000 });
+  Object.assign(turn, r, { seconds: (Date.now() - job.t0) / 1000 });
   endJob(job);
   if (!r.stopped) api().flash().catch(() => {});   // taakbalkknop knippert als HyGra niet vooraan staat
   if (job.node.isConnected) {
-    if (model === "claude") fillBot(job.node, turn, chat.cwd);
-    else { const n = botNode(model); fillBot(n, turn); job.node.replaceWith(n); }
+    if (job.kind === "claude") fillBot(job.node, turn, chat.cwd);
+    else { const n = botNode(job.model); fillBot(n, turn); job.node.replaceWith(n); }
     scrollDown(false);
   }
   if (chats.includes(chat)) { save(); renderHistory(); }
-  if (model === "claude") loadExternal();   // een verdergezet Code-gesprek schuift naar boven
-  if (lane === "gpu") warm();
+  if (job.kind === "claude") api().claude_done(job.id).catch(() => {});   // bewaard: de jobmap mag weg
+}
+
+// na een herstart: Claude-antwoorden die doorliepen terwijl HyGra dicht was, opnieuw volgen (of het resultaat ophalen)
+function resumeClaude() {
+  for (const chat of chats) for (const turn of chat.turns) {
+    if (!turn.running) continue;
+    const job = claudeJob(chat, turn, turn.running, turn.t0 || Date.now());
+    delete turn.running; delete turn.t0;
+    turn.pending = job;
+    startJob(job);
+    api().claude_attach(job.id).catch((err) => ({ error: String(err) })).then((r) => settle(job, r));
+  }
+  renderAll();
 }
 
 function applyModel() {
@@ -1029,6 +1054,7 @@ window.addEventListener("pywebviewready", async () => {
     renderUsage(await api().limits(false));
     [...$("model").options].forEach((o) => { if (o.value !== "claude" && !info.models.includes(o.value)) o.remove(); });
     onModelChange();
+    resumeClaude();
     loadExternal();
   } finally {   // ook bij een fout: het laadscherm mag nooit blijven hangen
     $("boot").classList.add("gone");
