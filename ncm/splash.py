@@ -50,6 +50,15 @@ gdip.GdipCreateFromHDC.argtypes = [HANDLE, ctypes.POINTER(HANDLE)]
 
 OLIVE, OLIVE_DEEP = 0x3B461C, 0x2E3714
 ORANGE, MUSTARD, MINT, TEXT = 0xFF7A1A, 0xF2C14E, 0x7FE0C8, 0xF4E4BC
+FACE, LINE = "Chakra Petch", 6
+try:   # the theme the page chose last (Api.theme), so the splash matches #boot in it
+    with open(os.path.join(os.environ.get("LOCALAPPDATA", ""), "HyGra", "theme.txt"), encoding="utf-8") as _f:
+        if _f.read().strip() == "cyber":   # body.cyber in web/index.html
+            OLIVE, OLIVE_DEEP = 0x101018, 0x08080D
+            ORANGE, MUSTARD, MINT, TEXT = 0xFF5A4F, 0xFCEE0A, 0x00F0FF, 0xDDF6F8
+            FACE, LINE = "Rajdhani", 3
+except OSError:
+    pass
 WM_DESTROY, WM_CLOSE, WM_PAINT, WM_ERASEBKGND, WM_TIMER, WM_APP = 0x2, 0x10, 0xF, 0x14, 0x113, 0x8000
 CLASS = "HyGraSplash"
 
@@ -99,7 +108,7 @@ class Splash:
         self._t0 = time.perf_counter()
         self._ready = threading.Event()
         fonts = os.path.join(root, "web", "vendor", "fonts")
-        for f in ("ChakraPetch-Bold.ttf", "JetBrainsMono.ttf"):
+        for f in ("ChakraPetch-Bold.ttf", "Rajdhani-Bold.ttf", "JetBrainsMono.ttf"):
             gdi32.AddFontResourceExW(os.path.join(fonts, f), 0x10, None)   # FR_PRIVATE: only for this process
         threading.Thread(target=self._run, args=(root, width, height, title), daemon=True).start()
         self._ready.wait(2)
@@ -196,7 +205,7 @@ class Splash:
     # ----- drawing: the same layout as #boot in web/index.html, in CSS px * s
     def _draw(self, dc, W_, H_):
         s, t = self.s, time.perf_counter() - self._t0
-        line = round(6 * s)
+        line = round(LINE * s)
         self._fill(dc, 0, 0, W_, H_, ORANGE)
         self._fill(dc, line, line, W_ - 2 * line, H_ - 2 * line, OLIVE)
 
@@ -257,8 +266,8 @@ class Splash:
             gdip.GdipDeletePen(obj)
 
     @staticmethod
-    def _font(px, face="Chakra Petch", weight=700):
-        return gdi32.CreateFontW(-round(px), 0, 0, 0, weight, 0, 0, 0, 1, 0, 0, 5, 0, face)   # CLEARTYPE_QUALITY
+    def _font(px, face=None, weight=700):
+        return gdi32.CreateFontW(-round(px), 0, 0, 0, weight, 0, 0, 0, 1, 0, 0, 5, 0, face or FACE)   # CLEARTYPE_QUALITY
 
     def _text(self, dc, s_, x, y, px, rgb, baseline=False):
         f = self._font(px)
@@ -270,7 +279,7 @@ class Splash:
         gdi32.SelectObject(dc, old)
         gdi32.DeleteObject(f)
 
-    def _centered(self, dc, parts, cx, y, px, spacing, line_h, face="Chakra Petch", weight=700):
+    def _centered(self, dc, parts, cx, y, px, spacing, line_h, face=None, weight=700):
         """One line of text with CSS letter-spacing (also after the last letter), centered, line box from y."""
         f = self._font(px, face, weight)
         old = gdi32.SelectObject(dc, f)

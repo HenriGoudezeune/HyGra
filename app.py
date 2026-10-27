@@ -224,6 +224,16 @@ class Api:
         if self._hwnd and ctypes.windll.user32.GetForegroundWindow() != self._hwnd:
             _flash_taskbar(self._hwnd)
 
+    def theme(self, name):
+        """Remembers the page's theme outside WebView2, so the native splash (ncm/splash.py) starts in it too."""
+        path = os.path.join(os.environ.get("LOCALAPPDATA", ROOT), "HyGra", "theme.txt")
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("cyber" if name == "cyber" else "hg")
+        except OSError:
+            pass
+        return True
+
     def taskbar(self, busy):
         """Indeterminate progress on the taskbar button while something is thinking, so you see it from elsewhere."""
         if self._hwnd:
