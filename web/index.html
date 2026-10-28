@@ -89,6 +89,27 @@ h1 { margin: 0; font-size: 30px; letter-spacing: 1px; overflow: hidden; text-ove
 #log { flex: 1 1 auto; overflow-y: auto; display: flex; flex-direction: column; gap: 30px; padding: 32px 36px; }
 .msg { display: flex; gap: 14px; align-items: flex-start; }
 .msg.me { justify-content: flex-end; }
+/* SWIPE: elke beurt een eigen pagina naast de vorige; zonder SWIPE vallen deck en pagina's weg (display: contents) */
+#log.decked { position: relative; overflow: hidden; padding: 0; display: flex; flex-direction: column; gap: 0; }
+.deck { display: flex; flex: 1 1 auto; min-height: 0; will-change: transform; }
+.deck.glide { transition: transform .42s cubic-bezier(.2, .8, .2, 1); }
+.page { flex: 0 0 100%; min-width: 0; height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 30px; padding: 24px 36px 32px; touch-action: pan-y; }
+.page.snap { transition: transform .25s ease-out; }
+#log:not(.decked) :is(.deck, .page) { display: contents; }
+#log:not(.decked) :is(.pager, .edge, .pull) { display: none; }
+.pager { order: -1; flex: 0 0 auto; align-self: center; margin-top: 10px; display: flex; align-items: center; gap: 12px; padding: 6px 12px; background: var(--olive-deep); border: 2px solid var(--olive-soft); z-index: 3; max-width: 70%; }
+.ticks { display: flex; gap: 4px; overflow: hidden; }
+.tick { width: 22px; height: 8px; flex: 0 1 22px; min-width: 4px; border: 0; padding: 0; background: var(--olive-soft); cursor: pointer; clip-path: polygon(3px 0, 100% 0, calc(100% - 3px) 100%, 0 100%); }
+.tick:hover { background: var(--mustard); }
+.tick.on { background: var(--orange); } .tick.live { background: var(--mint); } .tick.on.live { background: linear-gradient(90deg, var(--orange), var(--mint)); }
+.count { font: 600 12px 'JetBrains Mono', monospace; color: var(--mustard); letter-spacing: 1px; white-space: nowrap; }
+.edge { position: absolute; top: 50%; transform: translateY(-50%); z-index: 3; width: 34px; height: 64px; border: 0; background: var(--olive-deep); opacity: 0; transition: opacity .2s; cursor: pointer; display: grid; place-items: center; }
+.edge.prev { left: 0; clip-path: polygon(0 0, 100% 12px, 100% calc(100% - 12px), 0 100%); } .edge.next { right: 0; clip-path: polygon(0 12px, 100% 0, 100% 100%, 0 calc(100% - 12px)); }
+#log:hover .edge:not([disabled]) { opacity: .9; } .edge[disabled] { display: none; }
+.pull { position: absolute; left: 50%; transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: 8px; opacity: var(--p, 0); font: 600 12px 'Chakra Petch'; letter-spacing: 2px; color: var(--mustard); pointer-events: none; padding: 6px 14px; background: var(--olive-deep); border: 2px solid var(--orange); max-width: 80%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pull.top { top: 50px; } .pull.bottom { bottom: 14px; }
+.pull i { flex: 0 0 auto; width: 8px; height: 8px; border: solid var(--orange); border-width: 3px 3px 0 0; transform: rotate(-45deg); } .pull.bottom i { transform: rotate(135deg); }
+.pull span { overflow: hidden; text-overflow: ellipsis; }
 .avatar { flex: 0 0 auto; }
 .bubble-me { background: var(--mustard); padding: 4px; max-width: 620px; min-width: 0; }
 .bubble-me > div { background: var(--olive-soft); padding: 16px 20px; }
@@ -417,7 +438,7 @@ body.funky .hist-src button.on, body.funky label.chip:has(input:checked) { borde
   aside.min { flex-direction: row; padding: 12px 16px; }
   aside.min .brand { flex-direction: row; }
   aside.min .rail-use { display: none; }
-  header, #log, form { padding-left: 16px; padding-right: 16px; }
+  header, #log, form, .page { padding-left: 16px; padding-right: 16px; }
 }
 /* laadscherm: staat er tot Python klaar is (torch + modellen) */
 #boot { position: fixed; inset: 0; z-index: 100; background: var(--olive); border: var(--line) solid var(--orange);
@@ -673,6 +694,46 @@ body.waifu.surfing .petals { display: block; }
 .petals i.h { width: auto; height: auto; background: none; border-radius: 0; font: 18px sans-serif; font-style: normal; color: #FF7EB6; }
 .petals i.h::before { content: "♥"; }
 @keyframes petal { from { transform: translate(0, 0) rotate(0); } to { transform: translate(-140px, calc(100vh + 60px)) rotate(600deg); } }
+/* SWIPE in NIGHT CITY: dunne HUD-lijnen, geel/cyaan, harde sneden, korte cyaan glitchlijn bij een nieuwe pagina.
+   Let op: "body.cyber .busy" (clip-path/padding) en "body.waifu :is(.bubble-bot, .busy)" (gradient) raken ook .tick.live,
+   daarom staan de tick-regels hieronder met .pager ervoor (hogere specificiteit) */
+body.cyber .pager { border-width: 1px; border-color: var(--olive-line); background: rgba(8,8,13,.88); padding: 5px 12px; clip-path: polygon(0 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%); }
+body.cyber .pager .tick { height: 6px; padding: 0; background: var(--olive-line); clip-path: polygon(3px 0,100% 0,calc(100% - 3px) 100%,0 100%); }
+body.cyber .pager .tick.on { background: var(--mustard); }
+body.cyber .pager .tick.live { background: var(--mint); }
+body.cyber .pager .tick.on.live { background: linear-gradient(90deg, var(--mustard), var(--mint)); }
+body.cyber .count { font-size: 11px; letter-spacing: 2px; color: var(--mint); }
+body.cyber .edge { width: 28px; background: rgba(8,8,13,.88); border-left: 2px solid var(--mustard); }
+body.cyber .edge.next { border-left: 0; border-right: 2px solid var(--mustard); }
+body.cyber .edge:hover { background: var(--olive-soft); }
+body.cyber .pull { border-width: 1px; border-color: var(--mustard); color: var(--mustard); font: 600 12px 'JetBrains Mono', monospace; letter-spacing: 2px; text-shadow: 1.5px 0 rgba(255,90,79,.65), -1.5px 0 rgba(0,240,255,.65); clip-path: polygon(0 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%); }
+body.cyber .pull i { border-color: var(--mint); border-width: 2px 2px 0 0; }
+body.cyber .page.arrive { position: relative; }
+body.cyber .page.arrive::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; z-index: 2; pointer-events: none; background: linear-gradient(90deg, transparent, var(--mint) 20%, var(--orange) 55%, transparent); animation: swipe-glitch .45s steps(1); }
+@keyframes swipe-glitch { 0% { opacity: 1; transform: translate(-30px, 0); } 25% { opacity: .4; transform: translate(14px, 40vh); } 50% { opacity: 1; transform: translate(-6px, 18vh); } 75% { opacity: .5; transform: translate(10px, 62vh); } 100% { opacity: 0; transform: none; } }
+
+/* SWIPE in WAIFU: ronde pillen, zachte schaduwen, pagina komt zacht binnen */
+body.waifu .pager { border: 2px solid var(--olive-line); border-radius: 999px; background: rgba(255,255,255,.85); box-shadow: 0 6px 16px var(--glow); }
+body.waifu .pager .tick { height: 8px; padding: 0; border-radius: 999px; background: var(--olive-line); clip-path: none; box-shadow: none; }
+body.waifu .pager .tick.on { background: var(--orange); }
+body.waifu .pager .tick.live { background: var(--mint); }
+body.waifu .pager .tick.on.live { background: linear-gradient(90deg, var(--orange), var(--mustard)); }
+body.waifu .count { font-family: 'M PLUS Rounded 1c', sans-serif; font-weight: 800; color: var(--orange); }
+body.waifu .count::after { content: " ♡"; }
+body.waifu .edge { clip-path: none; width: 40px; height: 40px; border-radius: 50%; background: var(--olive-deep); border: 2px solid var(--olive-line); box-shadow: 0 6px 16px var(--glow); }
+body.waifu .edge:hover { background: var(--olive-soft); }
+body.waifu .pull { border: 2px solid var(--orange); border-radius: 999px; background: var(--olive-deep); color: var(--orange); font: 800 12px 'M PLUS Rounded 1c', sans-serif; box-shadow: 0 6px 16px var(--glow); }
+body.waifu .pull i { border-color: var(--orange); border-radius: 2px; }
+body.waifu .page.arrive { animation: swipe-soft .45s ease-out; }
+@keyframes swipe-soft { from { opacity: .3; transform: scale(.97); } to { opacity: 1; transform: none; } }
+
+/* funky: tick en pull nemen de wisselende kleuren over (na de basisregels, zelfde specificiteit) */
+body.funky .pager .tick.on { background: var(--f3); }
+body.funky .pager .tick.on.live { background: linear-gradient(90deg, var(--f3), var(--f5)); }
+body.funky .pager { border-color: var(--f1); }
+body.funky .pull { border-color: var(--f2); }
+body.funky .pull i { border-color: var(--f2); }
+body.funky .edge { border-color: var(--f4); }
 </style>
 </head>
 <body>
@@ -830,9 +891,14 @@ body.waifu.surfing .petals { display: block; }
       <svg width="18" height="15" viewBox="0 0 22 18" aria-hidden="true"><path d="M6 2 L2 2 L2 16 L6 16 M16 2 L20 2 L20 16 L16 16" stroke="#7FE0C8" stroke-width="3" fill="none"/><path d="M7 6 L15 6 M7 12 L13 12" stroke="#F2C14E" stroke-width="3"/></svg>
       DETAILS <kbd>^O</kbd>
     </label>
+    <label class="chip" title="Swipe: elke vraag een eigen pagina; veeg opzij of scroll voorbij de rand voor de vorige en volgende (Alt+←/→)">
+      <input type="checkbox" id="swipe">
+      <svg width="18" height="15" viewBox="0 0 22 18" aria-hidden="true"><path d="M1 3 L9 3 L9 15 L1 15 Z" stroke="#7FE0C8" stroke-width="2.5" fill="none"/><path d="M12 9 L21 9 M17 5 L21 9 L17 13" stroke="#F2C14E" stroke-width="3" fill="none"/></svg>
+      SWIPE
+    </label>
   </div>
   <button class="manage" id="manage" type="button">MODELLEN BEHEREN · INLOGGEN</button>
-  <small class="keys">CTRL+N nieuw · CTRL+B zijbalk · CTRL+T team · CTRL+O details · CTRL+, instellingen</small>
+  <small class="keys">CTRL+N nieuw · CTRL+B zijbalk · CTRL+T team · CTRL+O details · CTRL+, instellingen · ALT+←/→ vorige/volgende vraag</small>
 </div>
 
 <div class="prefs models hidden" id="models" role="dialog" aria-label="Modellen" aria-modal="true">
@@ -922,6 +988,7 @@ body.waifu.surfing .petals { display: block; }
 <script src="vendor/marked.min.js"></script>
 <script src="vendor/purify.min.js"></script>
 <script src="vendor/katex/katex.min.js"></script>
+<script src="swipe.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 const COLORS = ["var(--orange)", "var(--orange)", "var(--mustard)", "var(--mustard)", "var(--mustard)", "var(--mint)", "var(--mint)", "var(--mint)", "var(--mint)"];
@@ -1262,11 +1329,33 @@ async function refreshUsage() {
 
 function renderAll() {
   $("title").textContent = current ? current.title : "Nieuw gesprek";
-  $("log").replaceChildren();
-  if (current && current.loading) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "Gesprek laden…"; $("log").append(p); }
+  const log = $("log"), prev = { chat: deck.chat, n: deck.n, i: deck.i, on: decked() };
+  if (prev.on) deck.pages.forEach((p, k) => pageScroll.set(deck.turns[k], p.scrollTop));   // elke pagina komt terug waar je ze liet
+  log.replaceChildren(); log.classList.remove("decked");
+  Object.assign(deck, { chat: current, n: 0, i: 0, pages: [], turns: [] });
+  if (current && current.loading) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "Gesprek laden…"; log.append(p); }
   else if (!current || !current.turns.length) renderEmpty();
-  else current.turns.forEach((t) => { addMe(t.prompt); if (t.pending) { $("log").append(t.pending.node); if (t.pending.kind === "claude") scheduleDraw(t.pending); } else addBot(t); });
-  syncLoadCard(); scrollDown(); applyModel();
+  else {
+    const track = document.createElement("div"); track.className = "deck"; log.append(track);
+    current.turns.forEach((t) => {   // één pagina per beurt: je vraag met het antwoord eronder
+      const page = document.createElement("div"); page.className = "page"; track.append(page);
+      deck.pages.push(page); deck.turns.push(t);
+      addMe(t.prompt, page);
+      if (t.pending) { page.append(t.pending.node); if (t.pending.kind === "claude") scheduleDraw(t.pending); } else addBot(t, page);
+    });
+    deck.n = deck.pages.length;
+  }
+  if (swipeOn && deck.n) {
+    log.classList.add("decked"); deckChrome();
+    const same = prev.chat === current && prev.on, grew = same && deck.n === prev.n + 1;
+    deck.pages.forEach((p, k) => {
+      const s = pageScroll.get(deck.turns[k]);
+      if (k === deck.n - 1 && (!same || s == null)) p.scrollTop = p.scrollHeight; else if (s != null) p.scrollTop = s;
+    });
+    // een nieuwe vraag: van de pagina waar je was naar rechts schuiven; anders blijven waar je was (of de laatste bij een ander gesprek)
+    showPage(grew || !same ? deck.n - 1 : Math.min(prev.i, deck.n - 1), grew && prev.i !== deck.n - 1 ? { from: prev.i } : {});
+  }
+  syncLoadCard(); if (!decked()) scrollDown(); applyModel();
   renderHistory(); syncTeam();
   warmSoon();
 }
@@ -1301,10 +1390,10 @@ function showNoClaude() {
 }
 
 /* --- berichten --- */
-function addMe(text) {
+function addMe(text, page) {
   const n = $("t-me").content.cloneNode(true);
   n.querySelector("pre").textContent = text;
-  $("log").append(n); scrollDown();
+  page.append(n);
 }
 
 function botNode(model) {
@@ -1353,16 +1442,165 @@ function fillBot(n, t, cwd) {
 }
 
 const botCache = new WeakMap();   // beurt → getekende node: Markdown, KaTeX en links maar één keer per antwoord
-function addBot(t) {
+function addBot(t, page) {
   let n = isChatModel(t.model) && !t.error ? botCache.get(t) : null;
   if (!n) { n = botNode(t.model); fillBot(n, t, current && current.cwd); if (isChatModel(t.model) && !t.error) botCache.set(t, n); }
-  $("log").append(n); scrollDown();
+  page.append(n);
 }
+// wat scrollt: met SWIPE de pagina van dat bericht (of die je ziet), anders het hele gesprek
+const scroller = (el) => decked() ? (el && el.closest(".page")) || deck.pages[deck.i] : $("log");
+const nearEnd = (el) => { const l = scroller(el); return !l || l.scrollHeight - l.scrollTop - l.clientHeight < 120; };
 // follow new text only when you are already at the bottom, so you can scroll up while Claude writes
-function scrollDown(force = true) {
-  const l = $("log");
-  if (force || l.scrollHeight - l.scrollTop - l.clientHeight < 120) l.scrollTop = l.scrollHeight;
+function scrollDown(force = true, el) {
+  const l = scroller(el);
+  if (l && (force || nearEnd(el))) l.scrollTop = l.scrollHeight;
 }
+
+/* --- SWIPE: elke beurt een eigen pagina. Een nieuwe vraag schuift naar rechts; terug met een veeg (touchpad, scherm), de pijlen
+   opzij, de streepjes bovenaan, Alt+←/→, of door voorbij de boven- of onderrand van een pagina te scrollen, zoals in een gewone chat --- */
+let swipeOn = true;
+try { swipeOn = localStorage.getItem("hygra-swipe") !== "0"; } catch {}
+const deck = { chat: null, n: 0, i: 0, pages: [], turns: [] };   // wat er nu getekend is
+const pageScroll = new WeakMap();   // beurt → scrollTop
+const decked = () => $("log").classList.contains("decked");
+const CHEVRON = (d) => `<svg width="14" height="24" viewBox="0 0 14 24" aria-hidden="true"><path d="${d}" stroke="#FF7A1A" stroke-width="3.5" fill="none"/></svg>`;
+const snippet = (t, n = 60) => { const s = (t.prompt || "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
+function deckChrome() {
+  const log = $("log"), nav = document.createElement("div"), ticks = document.createElement("div"), count = document.createElement("span");
+  nav.className = "pager"; nav.setAttribute("role", "navigation"); nav.setAttribute("aria-label", "Vragen in dit gesprek");
+  ticks.className = "ticks"; count.className = "count";
+  ticks.append(...deck.turns.map((t, k) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "tick";
+    b.title = (k + 1) + ". " + snippet(t); b.setAttribute("aria-label", "Vraag " + (k + 1));
+    b.onclick = () => goPage(k); return b;
+  }));
+  nav.append(ticks, count);
+  const edge = (cls, d, dir, label) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "edge " + cls;
+    b.innerHTML = CHEVRON(d); b.title = label + " (Alt+" + (dir < 0 ? "←" : "→") + ")"; b.setAttribute("aria-label", label);
+    b.onclick = () => goPage(deck.i + dir); return b;
+  };
+  const pull = document.createElement("div"); pull.className = "pull"; pull.innerHTML = "<i></i><span></span>";
+  log.append(nav, edge("prev", "M11 2 L3 12 L11 22", -1, "Vorige vraag"), edge("next", "M3 2 L11 12 L3 22", 1, "Volgende vraag"), pull);
+}
+function syncPager() {
+  const log = $("log"), many = deck.n > 1;
+  if (!decked()) return;
+  log.querySelector(".pager").style.display = many ? "" : "none";
+  log.querySelectorAll(".tick").forEach((b, k) => { b.classList.toggle("on", k === deck.i); b.classList.toggle("live", !!deck.turns[k].pending); });
+  log.querySelector(".count").textContent = (deck.i + 1) + " / " + deck.n;
+  log.querySelector(".edge.prev").disabled = deck.i === 0;
+  log.querySelector(".edge.next").disabled = deck.i >= deck.n - 1;
+}
+// naar pagina i; from: eerst daar staan en dan opzij glijden (nieuwe vraag)
+function showPage(i, how = {}) {
+  const track = $("log").querySelector(".deck");
+  if (!track || !decked()) return;
+  deck.i = i = Math.max(0, Math.min(deck.n - 1, i));
+  if (how.from != null) {
+    track.classList.remove("glide"); track.style.transform = `translateX(${-how.from * 100}%)`;
+    void track.offsetWidth;   // eerst op de oude plek tekenen, anders is er niets om te animeren
+    how.glide = true;
+  }
+  track.classList.toggle("glide", !!how.glide);
+  track.style.transform = `translateX(${-i * 100}%)`;
+  deck.pages.forEach((p, k) => { p.classList.toggle("on", k === i); p.inert = k !== i; });   // de andere pagina's: geen focus, geen Tab
+  if ((how.glide || how.y) && !how.quiet) arrive(deck.pages[i]);
+  syncPager();
+}
+function arrive(p) { p.classList.remove("arrive"); void p.offsetWidth; p.classList.add("arrive"); clearTimeout(p.arriveT); p.arriveT = setTimeout(() => p.classList.remove("arrive"), 450); }
+// axis "y": je scrolde voorbij de rand; de pagina komt van boven (vorige, onderaan) of van onder (volgende, bovenaan)
+function goPage(i, axis = "x") {
+  if (!decked() || i < 0 || i >= deck.n || i === deck.i) return;
+  const dir = Math.sign(i - deck.i), old = deck.pages[deck.i];
+  unpull(old, false);
+  if (axis !== "y") return showPage(i, { glide: true });
+  const p = deck.pages[i];
+  showPage(i, { y: true });
+  p.scrollTop = dir < 0 ? p.scrollHeight : 0;
+  p.animate([{ transform: `translateY(${dir < 0 ? -40 : 40}%)`, opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 360, easing: "cubic-bezier(.2, .8, .2, 1)" });
+}
+// live meebewegen tijdens een veeg, en terugveren als hij niet ver genoeg ging
+function dragDeck(x) {
+  const track = $("log").querySelector(".deck");
+  track.classList.remove("glide"); track.style.transform = `translateX(calc(${-deck.i * 100}% + ${x}px))`;
+}
+function pullPage(y) {
+  const p = deck.pages[deck.i], hint = $("log").querySelector(".pull"), up = y > 0, to = deck.turns[deck.i + (up ? -1 : 1)];
+  p.classList.remove("snap"); p.style.transform = `translateY(${y}px)`;
+  hint.className = "pull " + (up ? "top" : "bottom");
+  hint.style.setProperty("--p", Math.min(1, Math.abs(y) / 60).toFixed(2));
+  hint.querySelector("span").textContent = (up ? "VORIGE · " : "VOLGENDE · ") + (to ? snippet(to, 48) : "");
+}
+function unpull(p, snap = true) {
+  const hint = $("log").querySelector(".pull");
+  if (hint) hint.style.setProperty("--p", 0);
+  if (!p || !p.style.transform) return;
+  p.classList.toggle("snap", snap); p.style.transform = "";
+}
+function snapBack() { showPage(deck.i, { glide: true, quiet: true }); unpull(deck.pages[deck.i]); }
+// kan iets onder de muis (codeblok, tabel, uitklapblok) zelf nog die kant op scrollen? dan krijgt dat de beweging
+function innerScroll(el, axis, d, stop) {
+  for (; el && el !== stop && el.nodeType === 1; el = el.parentElement) {
+    const s = getComputedStyle(el), o = axis === "x" ? s.overflowX : s.overflowY;
+    if (o !== "auto" && o !== "scroll") continue;
+    if (axis === "x" ? (d < 0 ? el.scrollLeft > 0 : el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
+      : (d < 0 ? el.scrollTop > 0 : el.scrollTop + el.clientHeight < el.scrollHeight - 1)) return true;
+  }
+  return false;
+}
+const wheelPager = new WheelPager({ width: 1000 });
+let wheelIdle = 0;
+$("log").addEventListener("wheel", (e) => {
+  if (!decked() || e.ctrlKey || !deck.n) return;   // Ctrl+wiel = zoomen
+  const page = deck.pages[deck.i];
+  let dx = e.deltaX, dy = e.deltaY;
+  if (e.deltaMode === 1) { dx *= 40; dy *= 40; }
+  if (e.shiftKey && !dx) { dx = dy; dy = 0; }   // Shift+wiel = opzij
+  if (Math.abs(dy) >= Math.abs(dx) && innerScroll(e.target, "y", dy, page)) return;
+  wheelPager.width = $("log").clientWidth;
+  const r = wheelPager.wheel({ dx, dy, t: e.timeStamp, atTop: page.scrollTop <= 1, atBottom: page.scrollHeight - page.scrollTop - page.clientHeight <= 1,
+    canPrev: deck.i > 0, canNext: deck.i < deck.n - 1, innerX: Math.abs(dx) > Math.abs(dy) && innerScroll(e.target, "x", dx, page) });
+  if (r.prevent) e.preventDefault();
+  if (r.kind === "drag") dragDeck(r.x);
+  else if (r.kind === "pull") pullPage(r.y);
+  else if (r.kind === "go") goPage(deck.i + r.dir, r.axis);
+  clearTimeout(wheelIdle);
+  wheelIdle = setTimeout(() => { if (wheelPager.idle(performance.now()).kind === "snap") snapBack(); }, 340);
+}, { passive: false });
+// aanraakscherm en pen: met de vinger meeslepen, loslaten = doorschuiven of terugveren
+let touch = null;
+$("log").addEventListener("pointerdown", (e) => {
+  if (!decked() || e.pointerType === "mouse" || !e.isPrimary) return;
+  touch = { x: e.clientX, y: e.clientY, t: e.timeStamp, id: e.pointerId, on: false };
+});
+$("log").addEventListener("pointermove", (e) => {
+  if (!touch || e.pointerId !== touch.id) return;
+  const dx = e.clientX - touch.x, dy = e.clientY - touch.y;
+  if (!touch.on) {
+    if (Math.abs(dy) > 12 || innerScroll(e.target, "x", -dx, deck.pages[deck.i])) { touch = null; return; }   // verticaal: gewoon scrollen
+    if (Math.abs(dx) < 12) return;
+    touch.on = true; $("log").setPointerCapture(e.pointerId);
+  }
+  const edge = (dx > 0 && deck.i === 0) || (dx < 0 && deck.i === deck.n - 1);
+  dragDeck(edge ? Math.max(-60, Math.min(60, dx * .25)) : dx);
+});
+function touchEnd(e) {
+  if (!touch || e.pointerId !== touch.id) return;
+  const t = touch; touch = null;
+  if (!t.on) return;
+  const dx = e.clientX - t.x, fast = Math.abs(dx) / Math.max(1, e.timeStamp - t.t) > .5;
+  if (e.type === "pointerup" && (Math.abs(dx) > $("log").clientWidth * .2 || fast)) { const to = deck.i - Math.sign(dx); if (to >= 0 && to < deck.n) return goPage(to); }
+  snapBack();
+}
+$("log").addEventListener("pointerup", touchEnd);
+$("log").addEventListener("pointercancel", touchEnd);
+$("log").addEventListener("scroll", () => { if (decked() && $("log").scrollLeft) $("log").scrollLeft = 0; });   // focus of zoeken mag het deck niet verschuiven
+document.addEventListener("keydown", (e) => {   // Alt+←/→ overal; ←/→ alleen als je niet aan het typen bent
+  if (!decked() || e.ctrlKey || e.metaKey || e.shiftKey || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+  if (!e.altKey && e.target.closest("input, textarea, select, [contenteditable]")) return;
+  e.preventDefault(); goPage(deck.i + (e.key === "ArrowLeft" ? -1 : 1));
+});
 
 // de echte spinner-woorden van Claude Code (uit claude.exe gehaald): één per antwoord, zoals in de terminal
 const CLAUDE_VERBS = ["Accomplishing", "Actioning", "Actualizing", "Architecting", "Baking", "Beaming", "Beboppin'", "Befuddling", "Billowing", "Blanching", "Bloviating", "Boogieing", "Boondoggling", "Booping", "Bootstrapping", "Brewing", "Bunning", "Burrowing", "Calculating", "Caramelizing", "Cascading", "Catapulting", "Cerebrating", "Channeling", "Choreographing", "Churning", "Clauding", "Coalescing", "Cogitating", "Combobulating", "Composing", "Computing", "Concocting", "Considering", "Contemplating", "Cooking", "Crafting", "Creating", "Crunching", "Crystallizing", "Cultivating", "Deciphering", "Deliberating", "Determining", "Dilly-dallying", "Discombobulating", "Doing", "Doodling", "Drizzling", "Ebbing", "Effecting", "Elucidating", "Embellishing", "Enchanting", "Envisioning", "Fermenting", "Fiddle-faddling", "Finagling", "Flambéing", "Flibbertigibbeting", "Flowing", "Flummoxing", "Fluttering", "Forging", "Forming", "Frolicking", "Frosting", "Gallivanting", "Galloping", "Garnishing", "Generating", "Gesticulating", "Germinating", "Gitifying", "Grooving", "Gusting", "Harmonizing", "Hashing", "Hatching", "Herding", "Honking", "Hullaballooing", "Hyperspacing", "Ideating", "Imagining", "Improvising", "Incubating", "Inferring", "Infusing", "Ionizing", "Jitterbugging", "Julienning", "Kerfuffling", "Kneading", "Leavening", "Levitating", "Lollygagging", "Manifesting", "Marinating", "Meandering", "Metamorphosing", "Misting", "Moonwalking", "Moseying", "Mulling", "Mustering", "Nebulizing", "Nesting", "Newspapering", "Noodling", "Nucleating", "Onioning", "Orbiting", "Orchestrating", "Osmosing", "Perambulating", "Percolating", "Perusing", "Philosophizing", "Photosynthesizing", "Polishing", "Pollinating", "Pondering", "Pontificating", "Pouncing", "Precipitating", "Prestidigitating", "Processing", "Proofing", "Propagating", "Puttering", "Puzzling", "Quantumizing", "Razzle-dazzling", "Razzmatazzing", "Recombobulating", "Reticulating", "Roosting", "Ruminating", "Sautéing", "Scampering", "Schlepping", "Scurrying", "Seasoning", "Shenaniganing", "Shimmying", "Simmering", "Skedaddling", "Sketching", "Slithering", "Smooshing", "Sock-hopping", "Spelunking", "Spinning", "Sprouting", "Stewing", "Sublimating", "Swirling", "Swooping", "Symbioting", "Synthesizing", "Tempering", "Thinking", "Thundering", "Tinkering", "Tomfoolering", "Topsy-turvying", "Transfiguring", "Transmogrifying", "Transmuting", "Twisting", "Undulating", "Unfurling", "Unraveling", "Vibing", "Waddling", "Wandering", "Warping", "Whatchamacalliting", "Whirlpooling", "Whirring", "Whisking", "Wibbling", "Working", "Wrangling", "Zesting", "Zigzagging"];
@@ -1411,7 +1649,7 @@ function putBack(j, texts) {
    (na een tool), of meteen na het antwoord als een eigen beurt die er nog bij hoort. --- */
 async function steer(j, text) {
   const q = { text, uid: null };
-  (j.queued ||= []).push(q); drawQueue(j); scrollDown(false);
+  (j.queued ||= []).push(q); drawQueue(j); scrollDown(false, j.node);
   const uid = await api().claude_steer(j.id, text).catch(() => null);
   if (uid) { q.uid = uid; drawQueue(j); return; }
   j.queued = j.queued.filter((x) => x !== q); drawQueue(j);   // het antwoord was net klaar: dan wordt het gewoon je volgende bericht
@@ -1455,7 +1693,7 @@ function syncLoadCard() {
   const j = lanes.gpu;
   if (!j || j.kind !== "load") return;
   if (isChat()) j.node.remove();
-  else if (!j.node.isConnected) { $("log").append(j.node); scrollDown(); }
+  else if (!j.node.isConnected) { (decked() ? deck.pages[deck.n - 1] : $("log")).append(j.node); scrollDown(true, j.node); }
 }
 
 // funky mode: zolang er iets bezig is, wisselt elk deel van de rand op zijn eigen tempo van kleur
@@ -1474,7 +1712,7 @@ function syncTaskbar() {
 }
 
 function refreshUi() {
-  syncFunky();
+  syncFunky(); syncPager();
   syncTaskbar();
   const job = viewJob(), canStop = !!job && job.kind !== "load";   // tijdens het laden van een model: enkel wachten
   const between = canStop && job.model === "claude" && !job.stopping && !!$("prompt").value.trim();   // tekst getypt: tussendoor sturen
@@ -1511,7 +1749,7 @@ function scheduleDraw(j) { if (!j.raf) j.raf = requestAnimationFrame(() => drawJ
 function drawJob(j) {
   j.raf = 0;
   if (!claudeJobs.has(j.id) || j.stopping || !j.node.isConnected) return;   // not on screen: catches up when it is
-  const stick = $("log").scrollHeight - $("log").scrollTop - $("log").clientHeight < 120;
+  const stick = nearEnd(j.node);
   if (j.cut == null) { j.cut = 0; j.live = []; j.body.replaceChildren(); }
   const open = detailsIn(j.live).map((d) => d.open);   // keep the blocks you opened open while the text is redrawn
   j.live.forEach((n) => n.remove());
@@ -1532,7 +1770,7 @@ function drawJob(j) {
   nestTools(j.body);
   j.body.querySelectorAll("details.tool:not(.done)").forEach((d) => d.classList.add("run"));
   fresh.forEach((n) => n.nodeType === 1 && linkFiles(n, j.chat.cwd));
-  if (stick) scrollDown();
+  if (stick) scrollDown(true, j.node);
   if (j.chat === current) syncTeam(true);
 }
 const settled = new Map();   // bericht-id → afgewerkte job, voor wat Claude Code na het einde nog stuurt
@@ -1677,8 +1915,9 @@ async function settle(job, r) {
     setTimeout(() => settled.delete(job.id), 120000);
   }
   if (job.node.isConnected) {
+    const stick = nearEnd(job.node);
     if (job.kind !== "claude") { const n = botNode(job.model); fillBot(n, turn); job.node.replaceWith(n); }
-    scrollDown(false);
+    if (stick) scrollDown(true, turn === deck.turns[deck.n - 1] && deck.pages[deck.n - 1]);
   }
   if (chats.includes(chat)) { save(); renderHistory(); }
   if (job.kind === "claude") {
@@ -1816,7 +2055,11 @@ function syncTeam(soon) {
 }
 function showInChat(d) {   // de map en al haar ouders open, en ernaar scrollen
   for (let x = d; x; x = x.parentElement.closest("details.agent")) x.open = true;
-  d.scrollIntoView({ block: "center", behavior: "smooth" });
+  const p = d.closest(".page");
+  if (p && decked()) {   // met SWIPE: eerst naar de pagina van die beurt, dan binnen de pagina scrollen (scrollIntoView zou het deck verschuiven)
+    goPage(deck.pages.indexOf(p));
+    p.scrollTo({ top: p.scrollTop + d.getBoundingClientRect().top - p.getBoundingClientRect().top - p.clientHeight / 2 + Math.min(d.offsetHeight, p.clientHeight) / 2, behavior: "smooth" });
+  } else d.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 // de chat van één agent: de opdracht die ze kreeg, wat ze onderweg zei en deed, haar sub-agents en haar resultaat
 let agentOpen = null;   // data-id van de agent waarvan de chat open staat
@@ -2018,6 +2261,12 @@ function syncVerbose() {
 try { $("verbose").checked = localStorage.getItem("hygra-verbose") === "1"; } catch {}
 $("verbose").onchange = syncVerbose;
 syncVerbose();
+$("swipe").checked = swipeOn;
+$("swipe").onchange = () => {   // SWIPE aan of uit: zelfde gesprek, andere weergave
+  swipeOn = $("swipe").checked;
+  try { localStorage.setItem("hygra-swipe", swipeOn ? "1" : "0"); } catch {}
+  renderAll();
+};
 function setSide(min) {   // zijbalk in- of uitklappen; blijft onthouden
   $("side").classList.toggle("min", min);
   const b = $("side-btn"), what = min ? "Zijbalk uitklappen" : "Zijbalk inklappen";

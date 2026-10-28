@@ -20,6 +20,7 @@ HyGra (from *HydrarGyrum*, Hg, element 80) runs **Claude Opus 5.5** through Clau
 - **Remote Control.** Every chat is also a session in the Claude mobile app and on claude.ai/code while a reply runs.
 - **Agent teams as folders.** Every agent Claude starts is a folder in the reply: type, task, status, duration and steps, with its own tool calls, sub-agents as subfolders and its result inside. The *Team* panel (Ctrl+T) shows all agents of the chat as a live tree; click one to jump to it. Calls to the local model show up as workers.
 - **See what Claude does.** *Details* (Ctrl+O) opens each tool call to its input and output, and shows Claude's thinking.
+- **Swipe through your questions.** Every question gets its own page with its reply under it. The second question slides in from the right, and so does every one after it. Swipe left on the touchpad or touchscreen to see an earlier question with its reply, and swipe right to come back. You can also use the side arrows, the ticks at the top or Alt+←/→. Normal scrolling still works: scroll past the top or bottom of a page and you land on the previous or next question. Switch *Swipe* off in settings for a classic single-column chat.
 - **Readable replies.** Markdown, KaTeX math, code blocks that start collapsed, and file paths you can click to open.
 - **A strong local coding model.** Qwen3-Coder 30B (mixture-of-experts, ~3B active per token) through [Ollama](https://ollama.com): free, offline, no account. It fits a 4 GB GPU plus 32 GB RAM at a usable speed. Install and download it from *Modellen beheren*.
 - **Claude can use it too.** `hygra_local_mcp.py` is an MCP server with `local_code` and `local_code_batch` (several tasks in parallel). Register it once with `claude mcp add --scope user hygra-local -- <venv python> <path>/hygra_local_mcp.py`, and every Claude Code session (and its subagents) can hand small coding tasks to the local model instead of spending plan usage.
@@ -53,6 +54,7 @@ Pick one in the settings panel (the sliders button next to the logo, or **Ctrl+,
 | Ctrl+B | Fold the sidebar into a rail |
 | Ctrl+O | Details: tool input/output and thinking |
 | Ctrl+, | Settings |
+| Alt+← / Alt+→ | Previous / next question (Swipe; plain ←/→ when you are not typing) |
 
 ## Install
 
