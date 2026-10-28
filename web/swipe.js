@@ -1,5 +1,6 @@
 // SWIPE: turns raw wheel events (touchpad two-finger swipes, mouse wheel) into page moves for the chat deck.
 // Pure logic: no DOM, no timers; the page passes the time and the scroll state in, and draws what comes back.
+// HyGra uses it for horizontal swipes only: vertical scrolling between questions is a continuous strip in index.html (vertWheel).
 //
 // Axes: dx > 0 = toward the NEXT page (right), dx < 0 = toward the PREVIOUS page (left);
 //       dy < 0 = scrolling up, dy > 0 = scrolling down (the usual WheelEvent signs).

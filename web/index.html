@@ -91,12 +91,11 @@ h1 { margin: 0; font-size: 30px; letter-spacing: 1px; overflow: hidden; text-ove
 .msg.me { justify-content: flex-end; }
 /* SWIPE: elke beurt een eigen pagina naast de vorige; zonder SWIPE vallen deck en pagina's weg (display: contents) */
 #log.decked { position: relative; overflow: hidden; padding: 0; display: flex; flex-direction: column; gap: 0; }
-.deck { display: flex; flex: 1 1 auto; min-height: 0; will-change: transform; }
+.deck { display: flex; flex: 1 1 auto; min-height: 0; will-change: transform; clip-path: inset(0 -100000px); }   /* boven en onder knippen (de strook schuift niet onder de streepjes), opzij niet */
 .deck.glide { transition: transform .42s cubic-bezier(.2, .8, .2, 1); }
 .page { flex: 0 0 100%; min-width: 0; height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 30px; padding: 24px 36px 32px; touch-action: pan-y; }
-.page.snap { transition: transform .25s ease-out; }
 #log:not(.decked) :is(.deck, .page) { display: contents; }
-#log:not(.decked) :is(.pager, .edge, .pull) { display: none; }
+#log:not(.decked) :is(.pager, .edge) { display: none; }
 .pager { order: -1; flex: 0 0 auto; align-self: center; margin-top: 10px; display: flex; align-items: center; gap: 12px; padding: 6px 12px; background: var(--olive-deep); border: 2px solid var(--olive-soft); z-index: 3; max-width: 70%; }
 .ticks { display: flex; gap: 4px; overflow: hidden; }
 .tick { width: 22px; height: 8px; flex: 0 1 22px; min-width: 4px; border: 0; padding: 0; background: var(--olive-soft); cursor: pointer; clip-path: polygon(3px 0, 100% 0, calc(100% - 3px) 100%, 0 100%); }
@@ -106,10 +105,6 @@ h1 { margin: 0; font-size: 30px; letter-spacing: 1px; overflow: hidden; text-ove
 .edge { position: absolute; top: 50%; transform: translateY(-50%); z-index: 3; width: 34px; height: 64px; border: 0; background: var(--olive-deep); opacity: 0; transition: opacity .2s; cursor: pointer; display: grid; place-items: center; }
 .edge.prev { left: 0; clip-path: polygon(0 0, 100% 12px, 100% calc(100% - 12px), 0 100%); } .edge.next { right: 0; clip-path: polygon(0 12px, 100% 0, 100% 100%, 0 calc(100% - 12px)); }
 #log:hover .edge:not([disabled]) { opacity: .9; } .edge[disabled] { display: none; }
-.pull { position: absolute; left: 50%; transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: 8px; opacity: var(--p, 0); font: 600 12px 'Chakra Petch'; letter-spacing: 2px; color: var(--mustard); pointer-events: none; padding: 6px 14px; background: var(--olive-deep); border: 2px solid var(--orange); max-width: 80%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pull.top { top: 50px; } .pull.bottom { bottom: 14px; }
-.pull i { flex: 0 0 auto; width: 8px; height: 8px; border: solid var(--orange); border-width: 3px 3px 0 0; transform: rotate(-45deg); } .pull.bottom i { transform: rotate(135deg); }
-.pull span { overflow: hidden; text-overflow: ellipsis; }
 .avatar { flex: 0 0 auto; }
 .bubble-me { background: var(--mustard); padding: 4px; max-width: 620px; min-width: 0; }
 .bubble-me > div { background: var(--olive-soft); padding: 16px 20px; }
@@ -706,8 +701,6 @@ body.cyber .count { font-size: 11px; letter-spacing: 2px; color: var(--mint); }
 body.cyber .edge { width: 28px; background: rgba(8,8,13,.88); border-left: 2px solid var(--mustard); }
 body.cyber .edge.next { border-left: 0; border-right: 2px solid var(--mustard); }
 body.cyber .edge:hover { background: var(--olive-soft); }
-body.cyber .pull { border-width: 1px; border-color: var(--mustard); color: var(--mustard); font: 600 12px 'JetBrains Mono', monospace; letter-spacing: 2px; text-shadow: 1.5px 0 rgba(255,90,79,.65), -1.5px 0 rgba(0,240,255,.65); clip-path: polygon(0 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%); }
-body.cyber .pull i { border-color: var(--mint); border-width: 2px 2px 0 0; }
 body.cyber .page.arrive { position: relative; }
 body.cyber .page.arrive::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; z-index: 2; pointer-events: none; background: linear-gradient(90deg, transparent, var(--mint) 20%, var(--orange) 55%, transparent); animation: swipe-glitch .45s steps(1); }
 @keyframes swipe-glitch { 0% { opacity: 1; transform: translate(-30px, 0); } 25% { opacity: .4; transform: translate(14px, 40vh); } 50% { opacity: 1; transform: translate(-6px, 18vh); } 75% { opacity: .5; transform: translate(10px, 62vh); } 100% { opacity: 0; transform: none; } }
@@ -722,17 +715,13 @@ body.waifu .count { font-family: 'M PLUS Rounded 1c', sans-serif; font-weight: 8
 body.waifu .count::after { content: " ♡"; }
 body.waifu .edge { clip-path: none; width: 40px; height: 40px; border-radius: 50%; background: var(--olive-deep); border: 2px solid var(--olive-line); box-shadow: 0 6px 16px var(--glow); }
 body.waifu .edge:hover { background: var(--olive-soft); }
-body.waifu .pull { border: 2px solid var(--orange); border-radius: 999px; background: var(--olive-deep); color: var(--orange); font: 800 12px 'M PLUS Rounded 1c', sans-serif; box-shadow: 0 6px 16px var(--glow); }
-body.waifu .pull i { border-color: var(--orange); border-radius: 2px; }
 body.waifu .page.arrive { animation: swipe-soft .45s ease-out; }
 @keyframes swipe-soft { from { opacity: .3; transform: scale(.97); } to { opacity: 1; transform: none; } }
 
-/* funky: tick en pull nemen de wisselende kleuren over (na de basisregels, zelfde specificiteit) */
+/* funky: de streepjes en de pijlen nemen de wisselende kleuren over (na de basisregels, zelfde specificiteit) */
 body.funky .pager .tick.on { background: var(--f3); }
 body.funky .pager .tick.on.live { background: linear-gradient(90deg, var(--f3), var(--f5)); }
 body.funky .pager { border-color: var(--f1); }
-body.funky .pull { border-color: var(--f2); }
-body.funky .pull i { border-color: var(--f2); }
 body.funky .edge { border-color: var(--f4); }
 </style>
 </head>
@@ -1331,7 +1320,7 @@ function renderAll() {
   $("title").textContent = current ? current.title : "Nieuw gesprek";
   const log = $("log"), prev = { chat: deck.chat, n: deck.n, i: deck.i, on: decked() };
   if (prev.on) deck.pages.forEach((p, k) => pageScroll.set(deck.turns[k], p.scrollTop));   // elke pagina komt terug waar je ze liet
-  log.replaceChildren(); log.classList.remove("decked");
+  vertReset(); log.replaceChildren(); log.classList.remove("decked");
   Object.assign(deck, { chat: current, n: 0, i: 0, pages: [], turns: [] });
   if (current && current.loading) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "Gesprek laden…"; log.append(p); }
   else if (!current || !current.turns.length) renderEmpty();
@@ -1480,15 +1469,15 @@ function deckChrome() {
     b.innerHTML = CHEVRON(d); b.title = label + " (Alt+" + (dir < 0 ? "←" : "→") + ")"; b.setAttribute("aria-label", label);
     b.onclick = () => goPage(deck.i + dir); return b;
   };
-  const pull = document.createElement("div"); pull.className = "pull"; pull.innerHTML = "<i></i><span></span>";
-  log.append(nav, edge("prev", "M11 2 L3 12 L11 22", -1, "Vorige vraag"), edge("next", "M3 2 L11 12 L3 22", 1, "Volgende vraag"), pull);
+  log.append(nav, edge("prev", "M11 2 L3 12 L11 22", -1, "Vorige vraag"), edge("next", "M3 2 L11 12 L3 22", 1, "Volgende vraag"));
 }
 function syncPager() {
   const log = $("log"), many = deck.n > 1;
   if (!decked()) return;
   log.querySelector(".pager").style.display = many ? "" : "none";
-  log.querySelectorAll(".tick").forEach((b, k) => { b.classList.toggle("on", k === deck.i); b.classList.toggle("live", !!deck.turns[k].pending); });
-  log.querySelector(".count").textContent = (deck.i + 1) + " / " + deck.n;
+  const H = deck.pages[deck.i].clientHeight, shown = deck.i + (Math.abs(vert.vy) > H / 2 ? Math.sign(vert.vy) : 0);   // halverwege de strook: de pagina die het meest in beeld is
+  log.querySelectorAll(".tick").forEach((b, k) => { b.classList.toggle("on", k === shown); b.classList.toggle("live", !!deck.turns[k].pending); });
+  log.querySelector(".count").textContent = (shown + 1) + " / " + deck.n;
   log.querySelector(".edge.prev").disabled = deck.i === 0;
   log.querySelector(".edge.next").disabled = deck.i >= deck.n - 1;
 }
@@ -1496,6 +1485,7 @@ function syncPager() {
 function showPage(i, how = {}) {
   const track = $("log").querySelector(".deck");
   if (!track || !decked()) return;
+  if (vert.vy || vert.vt) vertReset();
   deck.i = i = Math.max(0, Math.min(deck.n - 1, i));
   if (how.from != null) {
     track.classList.remove("glide"); track.style.transform = `translateX(${-how.from * 100}%)`;
@@ -1505,40 +1495,74 @@ function showPage(i, how = {}) {
   track.classList.toggle("glide", !!how.glide);
   track.style.transform = `translateX(${-i * 100}%)`;
   deck.pages.forEach((p, k) => { p.classList.toggle("on", k === i); p.inert = k !== i; });   // de andere pagina's: geen focus, geen Tab
-  if ((how.glide || how.y) && !how.quiet) arrive(deck.pages[i]);
+  if (how.glide && !how.quiet) arrive(deck.pages[i]);
   syncPager();
 }
 function arrive(p) { p.classList.remove("arrive"); void p.offsetWidth; p.classList.add("arrive"); clearTimeout(p.arriveT); p.arriveT = setTimeout(() => p.classList.remove("arrive"), 450); }
-// axis "y": je scrolde voorbij de rand; de pagina komt van boven (vorige, onderaan) of van onder (volgende, bovenaan)
-function goPage(i, axis = "x") {
+function goPage(i) {
   if (!decked() || i < 0 || i >= deck.n || i === deck.i) return;
-  const dir = Math.sign(i - deck.i), old = deck.pages[deck.i];
-  unpull(old, false);
-  if (axis !== "y") return showPage(i, { glide: true });
-  const p = deck.pages[i];
-  showPage(i, { y: true });
-  p.scrollTop = dir < 0 ? p.scrollHeight : 0;
-  p.animate([{ transform: `translateY(${dir < 0 ? -40 : 40}%)`, opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 360, easing: "cubic-bezier(.2, .8, .2, 1)" });
+  showPage(i, { glide: true });
 }
 // live meebewegen tijdens een veeg, en terugveren als hij niet ver genoeg ging
 function dragDeck(x) {
   const track = $("log").querySelector(".deck");
   track.classList.remove("glide"); track.style.transform = `translateX(calc(${-deck.i * 100}% + ${x}px))`;
 }
-function pullPage(y) {
-  const p = deck.pages[deck.i], hint = $("log").querySelector(".pull"), up = y > 0, to = deck.turns[deck.i + (up ? -1 : 1)];
-  p.classList.remove("snap"); p.style.transform = `translateY(${y}px)`;
-  hint.className = "pull " + (up ? "top" : "bottom");
-  hint.style.setProperty("--p", Math.min(1, Math.abs(y) / 60).toFixed(2));
-  hint.querySelector("span").textContent = (up ? "VORIGE · " : "VOLGENDE · ") + (to ? snippet(to, 48) : "");
+function snapBack() { showPage(deck.i, { glide: true, quiet: true }); }
+
+/* verticaal: één doorlopende strook, zoals een gewone chat. Scrol je voorbij de onderrand van een pagina, dan schuift de volgende
+   vraag er 1:1 onder aan (bovenaan geopend); voorbij de bovenrand komt de vorige erboven (onderaan geopend). Geen drempel en geen
+   sprong: je kan halverwege stoppen, en uitlopen op de touchpad loopt gewoon door naar de volgende vraag.
+   vy = hoe ver je voorbij de rand van de huidige pagina bent (+ = naar de volgende, − = naar de vorige); vt = waar vy heen glijdt,
+   zodat ook een muiswiel (100 px per klik) zacht schuift */
+const vert = { vy: 0, vt: 0, raf: 0 };
+function placeV() {
+  const i = deck.i, cur = deck.pages[i], H = cur.clientHeight, vy = vert.vy, d = Math.sign(vy);
+  deck.pages.forEach((p, k) => {
+    const on = k === i + d && d !== 0;
+    p.style.transform = k === i ? (vy ? `translateY(${-vy}px)` : "") : on ? `translate(${-d * 100}%, ${d * H - vy}px)` : "";
+    if (k !== i) p.inert = !on;
+  });
+  syncPager();
 }
-function unpull(p, snap = true) {
-  const hint = $("log").querySelector(".pull");
-  if (hint) hint.style.setProperty("--p", 0);
-  if (!p || !p.style.transform) return;
-  p.classList.toggle("snap", snap); p.style.transform = "";
+function vertReset() {
+  cancelAnimationFrame(vert.raf); vert.raf = 0; vert.vy = vert.vt = 0;
+  deck.pages.forEach((p) => p.style.transform = "");
 }
-function snapBack() { showPage(deck.i, { glide: true, quiet: true }); unpull(deck.pages[deck.i]); }
+function vertFrame() {
+  vert.raf = 0;
+  const cur = deck.pages[deck.i], H = cur.clientHeight, before = vert.vy;
+  vert.vy += (vert.vt - vert.vy) * .35;
+  if (Math.abs(vert.vt - vert.vy) < .5) vert.vy = vert.vt;
+  if (vert.vy * before < 0 || (before !== 0 && vert.vy === 0)) {   // terug over de rand: de rest is gewoon scrollen in deze pagina
+    const rest = vert.vt; vertReset(); showPage(deck.i);
+    if (rest && !vertWheel(rest)) cur.scrollBy({ top: rest, behavior: "smooth" });   // een korte pagina: meteen door naar de andere buur
+    return;
+  }
+  if (Math.abs(vert.vy) >= H) {   // de buurpagina vult het beeld: die wordt de huidige, de rest scrolt erin verder
+    const d = Math.sign(vert.vy), rest = vert.vt - d * H, next = deck.pages[deck.i + d];
+    vertReset(); showPage(deck.i + d);
+    if (rest && !vertWheel(rest)) next.scrollBy({ top: rest, behavior: "smooth" });
+    return;
+  }
+  placeV();
+  if (vert.vy !== vert.vt) vert.raf = requestAnimationFrame(vertFrame);
+}
+// geeft true als de strook deze scroll neemt; anders scrolt de pagina zelf
+function vertWheel(dy) {
+  if (!dy) return false;
+  const i = deck.i, cur = deck.pages[i];
+  if (!vert.vt && !vert.vy) {
+    const down = dy > 0, nb = deck.pages[i + (down ? 1 : -1)];
+    const atEdge = down ? cur.scrollHeight - cur.scrollTop - cur.clientHeight <= 1 : cur.scrollTop <= 1;
+    if (!nb || !atEdge) return false;
+    nb.scrollTop = down ? 0 : nb.scrollHeight;   // de buur toont de kant die aansluit
+  }
+  const H = cur.clientHeight;
+  vert.vt = Math.max(-2 * H, Math.min(2 * H, vert.vt + dy));   // wat voorbij een volle pagina gaat, scrolt daarna in de nieuwe verder
+  if (!vert.raf) vert.raf = requestAnimationFrame(vertFrame);
+  return true;
+}
 // kan iets onder de muis (codeblok, tabel, uitklapblok) zelf nog die kant op scrollen? dan krijgt dat de beweging
 function innerScroll(el, axis, d, stop) {
   for (; el && el !== stop && el.nodeType === 1; el = el.parentElement) {
@@ -1549,6 +1573,7 @@ function innerScroll(el, axis, d, stop) {
   }
   return false;
 }
+// opzij: WheelPager (web/swipe.js) volgt de veeg en beslist of ze doorschuift; verticaal doet de strook hierboven
 const wheelPager = new WheelPager({ width: 1000 });
 let wheelIdle = 0;
 $("log").addEventListener("wheel", (e) => {
@@ -1557,14 +1582,24 @@ $("log").addEventListener("wheel", (e) => {
   let dx = e.deltaX, dy = e.deltaY;
   if (e.deltaMode === 1) { dx *= 40; dy *= 40; }
   if (e.shiftKey && !dx) { dx = dy; dy = 0; }   // Shift+wiel = opzij
-  if (Math.abs(dy) >= Math.abs(dx) && innerScroll(e.target, "y", dy, page)) return;
+  if (Math.abs(dy) >= Math.abs(dx)) {
+    if (!vert.vt && !vert.vy && innerScroll(e.target, "y", dy, page)) return;
+    if (vertWheel(dy)) e.preventDefault();
+    return;
+  }
+  if (vert.vt || vert.vy) {   // tussen twee vragen: nog in beweging = eerst uitlopen; stil = naar de pagina die het meest in beeld is
+    e.preventDefault();
+    if (vert.raf) return;
+    const d = Math.abs(vert.vy) > page.clientHeight / 2 ? Math.sign(vert.vy) : 0;
+    vertReset(); showPage(deck.i + d);
+    return;
+  }
   wheelPager.width = $("log").clientWidth;
-  const r = wheelPager.wheel({ dx, dy, t: e.timeStamp, atTop: page.scrollTop <= 1, atBottom: page.scrollHeight - page.scrollTop - page.clientHeight <= 1,
-    canPrev: deck.i > 0, canNext: deck.i < deck.n - 1, innerX: Math.abs(dx) > Math.abs(dy) && innerScroll(e.target, "x", dx, page) });
+  const r = wheelPager.wheel({ dx, dy: 0, t: e.timeStamp, atTop: false, atBottom: false,
+    canPrev: deck.i > 0, canNext: deck.i < deck.n - 1, innerX: innerScroll(e.target, "x", dx, page) });
   if (r.prevent) e.preventDefault();
   if (r.kind === "drag") dragDeck(r.x);
-  else if (r.kind === "pull") pullPage(r.y);
-  else if (r.kind === "go") goPage(deck.i + r.dir, r.axis);
+  else if (r.kind === "go") goPage(deck.i + r.dir);
   clearTimeout(wheelIdle);
   wheelIdle = setTimeout(() => { if (wheelPager.idle(performance.now()).kind === "snap") snapBack(); }, 340);
 }, { passive: false });
