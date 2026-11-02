@@ -61,6 +61,7 @@ label.chip:has(input:focus-visible) { outline: 3px solid var(--mint); outline-of
 .chip input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
 .chip svg { opacity: .55; } .chip:has(input:checked) svg { opacity: 1; }
 .chip kbd { font: 10px 'JetBrains Mono', monospace; color: var(--text-mute); }
+.prefs .toggles { flex-wrap: wrap; } .prefs .toggles label.chip { flex: 1 1 calc(50% - 4px); }
 /* ingeklapt (Ctrl+B): smalle rail met logo, uitklappen, nieuw gesprek en de 5-uursmeter */
 .rail-use { display: none; }
 aside.min { flex-basis: 76px; width: 76px; padding: 18px 0; align-items: center; gap: 14px; }
@@ -723,6 +724,78 @@ body.funky .pager .tick.on { background: var(--f3); }
 body.funky .pager .tick.on.live { background: linear-gradient(90deg, var(--f3), var(--f5)); }
 body.funky .pager { border-color: var(--f1); }
 body.funky .edge { border-color: var(--f4); }
+
+/* TAKEN: Claudes takenlijst onder het antwoord, zoals in Claude Desktop; tijdens het antwoord plakt ze onderaan vast */
+.tasks { max-width: 620px; background: var(--olive-deep); border: 3px solid var(--olive-line); border-left: var(--line) solid var(--mint); }
+.tasks.live { position: sticky; bottom: 10px; z-index: 2; box-shadow: 0 8px 0 -2px rgba(0,0,0,.28); }
+.tasks summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; font-size: 12px; letter-spacing: 2px; font-weight: 600; color: var(--mint); }
+.tasks summary::-webkit-details-marker { display: none; }
+.tasks summary::before { content: ""; border-left: 8px solid var(--mint); border-top: 6px solid transparent; border-bottom: 6px solid transparent; transition: transform .15s; }
+.tasks[open] summary::before { transform: rotate(90deg); }
+.tasks summary span { font: 600 12px 'JetBrains Mono', monospace; letter-spacing: 1px; color: var(--text-mute); }
+.tasks.all summary span { color: var(--mustard); }
+.tasks ol { list-style: none; margin: 0; padding: 0 14px 10px; display: flex; flex-direction: column; gap: 5px; }
+.tasks li { display: flex; gap: 10px; align-items: baseline; font-size: 15px; line-height: 1.4; color: var(--text-dim); }
+.tasks li::before { content: ""; flex: 0 0 auto; width: 10px; height: 10px; background: var(--olive-line); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.tasks li.in_progress { color: var(--text); font-weight: 600; }
+.tasks li.in_progress::before { background: var(--mint); }
+.tasks.live li.in_progress::before { animation: blink .8s infinite steps(2); }
+.tasks li.completed { color: var(--text-mute); text-decoration: line-through; text-decoration-color: color-mix(in srgb, currentColor 70%, transparent); }
+.tasks li.completed::before { background: var(--mustard); }
+body:not(.verbose) .md details.tool.task { display: none; }   /* de lijst zegt het al */
+/* het slot van een beurt: stand van zaken, en een vraag met knoppen die meteen je antwoord sturen */
+.md .next { margin: 16px 0 2px; padding: 12px 16px; background: var(--olive); border-left: var(--line) solid var(--orange); display: flex; flex-direction: column; gap: 8px; }
+.md .next > i { font-style: normal; font-size: 11px; letter-spacing: 2px; font-weight: 600; color: var(--orange); }
+.md .next p { margin: 0; }
+.md .next .ask { font-weight: 700; color: var(--text); }
+.nbtns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.nbtn { min-height: 36px; padding: 0 16px; background: none; border: 3px solid var(--orange); color: var(--text); font-family: inherit; font-size: 14px; font-weight: 700; letter-spacing: 1px; cursor: pointer; }
+.nbtn:first-child { background: var(--orange); color: var(--olive-deep); }
+.nbtn:hover { border-color: var(--mustard); } .nbtn:first-child:hover { background: var(--mustard); }
+.msg:not([data-settled]) .nbtn, .page:not(:last-child) .nbtn { opacity: .4; pointer-events: none; }   /* enkel het laatste, afgewerkte antwoord */
+/* berichten tussen sessies (SendMessage): altijd zichtbaar, met wie en wat */
+.md details.tool.dm { border-left-color: var(--mustard); }
+.md details.tool.dm > summary b { color: var(--mustard); }
+.md details.tool.dm > summary span { color: var(--text); }
+body.cyber .tasks { border-width: 1px 1px 1px 3px; clip-path: polygon(0 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%); }
+body.cyber .tasks li::before { clip-path: none; width: 8px; height: 8px; }
+body.cyber .tasks summary, body.cyber .md .next > i { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+body.cyber .tasks summary b::after, body.cyber .md .next > i::after { content: " //"; color: var(--orange); }
+body.cyber .md .next { border-left-width: 3px; background: linear-gradient(90deg, rgba(255,90,79,.1), transparent); }
+body.cyber .nbtn { border-width: 1px; font-size: 15px; } body.cyber .nbtn:first-child { background: var(--mustard); border-color: var(--mustard); }
+body.cyber .nbtn:first-child:hover { background: var(--mint); border-color: var(--mint); }
+body.waifu .tasks { border-width: 2px; border-radius: 0 16px 16px 0; box-shadow: 0 6px 16px var(--glow); }
+body.waifu .tasks li::before { clip-path: none; border-radius: 50%; }
+body.waifu .tasks li.completed::before { content: "♡"; width: auto; height: auto; background: none; color: var(--orange); font-size: 12px; text-decoration: none; }
+body.waifu .tasks summary b::after, body.waifu .md .next > i::after { content: " ♡"; color: var(--orange); }
+body.waifu .md .next { border-radius: 0 14px 14px 0; background: var(--olive-soft); }
+body.waifu .nbtn { border-width: 2px; border-radius: 999px; } body.waifu .nbtn:first-child { color: #FFFFFF; border-color: transparent; background: linear-gradient(135deg, var(--orange), var(--mustard)); }
+body.funky .tasks { border-left-color: var(--f2); }
+body.funky .md .next { border-left-color: var(--f3); }
+body.funky .nbtn:first-child { background: var(--f4); border-color: var(--f4); }
+body.waifu.funky .nbtn:first-child { background: linear-gradient(135deg, var(--orange), var(--mustard)); }
+
+/* MINIMAAL (Ctrl+M): alleen het gesprek en de invoer, in het eigen thema. Zijbalk, kop, team, meters, avatars,
+   tool-regels en de figuur verdwijnen; kaders, kleuren, letters en funky blijven */
+.min-exit { display: none; }
+body.minimal :is(#side, #team, header, .avatar, .meta, .waifu-art, .levels, .level-view) { display: none !important; }
+body.minimal .msg[data-settled] .foot { display: none; }
+body.minimal .foot { font-size: 11px; }
+body.minimal .md :is(div.tool, details.tool:not(.agent), .think) { display: none !important; }
+body.minimal .md details.tool.agent > :is(.team-kids, .tool-more), body.minimal .md details.tool.agent .achat { display: none !important; }
+body.minimal .md details.tool.agent { margin: 4px 0 8px; }
+body.minimal .md details.tool.agent > summary { pointer-events: none; }
+body.minimal .md details.tool.agent > summary::before { display: none; }
+body.minimal .page, body.minimal #log:not(.decked) { padding: 26px max(24px, calc((100% - 860px) / 2)) 28px; gap: 22px; }
+body.minimal form { padding: 6px max(24px, calc((100% - 860px) / 2)) 22px; border-top: 0; background: none; }
+body.minimal textarea { min-height: 52px; }
+body.minimal .send { min-height: 52px; flex-basis: 60px; }
+body.minimal .bot { max-width: none; }
+body.minimal #log .pager { background: none; border: 0; box-shadow: none; padding: 2px 0; margin-top: 8px; clip-path: none; }
+body.minimal #log .pager .count { display: none; }
+body.minimal #log .pager .tick { height: 4px; opacity: .7; }
+body.minimal .min-exit { display: flex; position: fixed; top: 12px; right: 14px; z-index: 55; width: 36px; height: 36px; opacity: .3; transition: opacity .2s; }
+body.minimal .min-exit:hover, body.minimal .min-exit:focus-visible { opacity: 1; }
 </style>
 </head>
 <body>
@@ -851,6 +924,9 @@ body.funky .edge { border-color: var(--f4); }
         <svg class="i-stop" width="28" height="28" viewBox="0 0 28 28" aria-hidden="true" style="display:none"><path d="M6 1 L27 1 L27 22 L22 27 L1 27 L1 6 Z" fill="#2E3714"/></svg>
       </button>
     </form>
+    <button class="icon-btn min-exit" id="min-exit" type="button" aria-label="Minimalistisch uit" title="Minimalistisch uit (Ctrl+M) · instellingen: Ctrl+,">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M1 6 L1 1 L6 1 M12 1 L17 1 L17 6 M17 12 L17 17 L12 17 M6 17 L1 17 L1 12" stroke="#FF7A1A" stroke-width="2.5" fill="none"/></svg>
+    </button>
   </main>
   <aside id="team" class="hidden" aria-label="Agent-team">
     <div class="thead"><b>TEAM</b><button class="icon-btn" id="team-close" type="button" aria-label="Sluiten"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2 L14 14 M14 2 L2 14" stroke="#FF7A1A" stroke-width="3"/></svg></button></div>
@@ -885,9 +961,14 @@ body.funky .edge { border-color: var(--f4); }
       <svg width="18" height="15" viewBox="0 0 22 18" aria-hidden="true"><path d="M1 3 L9 3 L9 15 L1 15 Z" stroke="#7FE0C8" stroke-width="2.5" fill="none"/><path d="M12 9 L21 9 M17 5 L21 9 L17 13" stroke="#F2C14E" stroke-width="3" fill="none"/></svg>
       SWIPE
     </label>
+    <label class="chip" title="Minimalistisch: alleen het gesprek en de invoer, in je thema (Ctrl+M)">
+      <input type="checkbox" id="minimal">
+      <svg width="18" height="15" viewBox="0 0 22 18" aria-hidden="true"><path d="M1 1 L21 1 L21 17 L1 17 Z" stroke="#7FE0C8" stroke-width="2.5" fill="none"/><path d="M7 9 L15 9" stroke="#F2C14E" stroke-width="3"/></svg>
+      MINIMAAL <kbd>^M</kbd>
+    </label>
   </div>
   <button class="manage" id="manage" type="button">MODELLEN BEHEREN · INLOGGEN</button>
-  <small class="keys">CTRL+N nieuw · CTRL+B zijbalk · CTRL+T team · CTRL+O details · CTRL+, instellingen · ALT+←/→ vorige/volgende vraag</small>
+  <small class="keys">CTRL+N nieuw · CTRL+B zijbalk · CTRL+T team · CTRL+O details · CTRL+M minimaal · CTRL+, instellingen · ALT+←/→ vorige/volgende vraag</small>
 </div>
 
 <div class="prefs models hidden" id="models" role="dialog" aria-label="Modellen" aria-modal="true">
@@ -1038,6 +1119,7 @@ marked.use({
   gfm: true, breaks: true,
   renderer: {
     code({ text, lang }) {
+      if (lang === "next") return nextCard(text);
       const n = text.split("\n").length;
       return '<details class="code"><summary><span>' + esc(lang || "code").toUpperCase() + "</span><small>" + n + (n === 1 ? " regel" : " regels") +
         "</small></summary><pre><code>" + esc(text) + "</code></pre></details>";
@@ -1054,7 +1136,8 @@ marked.use({
       renderer(t) { const [name, ...rest] = t.text.split(" · ");
         let d = null; try { d = t.detail && JSON.parse(t.detail); } catch {}
         const kind = toolKind(name), i = (d && d.i) || {};
-        const head = kind === "agent" ? "<b>" + esc((i.subagent_type || "agent").toUpperCase()) + "</b><span>" + esc(i.description || rest.join(" · ")) + '</span><em></em><button type="button" class="achat" title="Lees de chat van deze agent">CHAT</button>'
+        const head = kind === "dm" ? "<b>BERICHT → " + esc(String(i.to || "?")) + "</b><span>" + esc(String(i.summary || i.message || "")) + "</span>"
+          : kind === "agent" ? "<b>" + esc((i.subagent_type || "agent").toUpperCase()) + "</b><span>" + esc(i.description || rest.join(" · ")) + '</span><em></em><button type="button" class="achat" title="Lees de chat van deze agent">CHAT</button>'
           : kind === "worker" ? "<b>" + esc(MODEL_LABEL.local) + "</b><span>" + esc(name.endsWith("batch") ? (i.tasks || []).length + " taken na elkaar" : String(i.task || "").slice(0, 160)) + "</span>"
           : "<b>" + esc(name) + "</b>" + (rest.length ? "<span>" + esc(rest.join(" · ")) + "</span>" : "");
         if (!d) return '<div class="tool">' + head + "</div>";   // older replies: only the line
@@ -1100,7 +1183,67 @@ function toolInput(i) {
   return Object.entries(i).map(([k, v]) => "<div><i>" + esc(k.toUpperCase()) + "</i>" + val(v) + "</div>").join("");
 }
 // a tool's output arrives later in the text: move it into the details of its call
-const toolKind = (name) => /^(Agent|Task)$/.test(name) ? "agent" : /^mcp__hygra-local__/.test(name) ? "worker" : "";
+const toolKind = (name) => /^(Agent|Task)$/.test(name) ? "agent" : /^mcp__hygra-local__/.test(name) ? "worker"
+  : /^Task(Create|Update|List|Get)$/.test(name) ? "task" : name === "SendMessage" ? "dm" : "";
+// het slot van een beurt (```next): wat nu klaar is, en als er iets te kiezen valt een vraag met knoppen die meteen antwoorden
+function nextCard(text) {
+  const recap = [], btns = []; let q = "";
+  for (const l of text.split("\n")) {
+    const m = /^\s*(recap|vraag|knop)\s*:\s*(.*)$/i.exec(l), v = (m ? m[2] : l).trim();
+    if (!v) continue;
+    if (!m || m[1].toLowerCase() === "recap") recap.push(v); else if (m[1].toLowerCase() === "vraag") q = v; else btns.push(v);
+  }
+  return '<div class="next"><i>' + (q ? "JOUW BEURT" : "STAND") + "</i>" + (recap.length ? "<p>" + marked.parseInline(recap.join(" ")) + "</p>" : "")
+    + (q ? '<p class="ask">' + esc(q) + "</p>" : "")
+    + (btns.length ? '<div class="nbtns">' + btns.slice(0, 3).map((b) => '<button type="button" class="nbtn" data-say="' + esc(b) + '">' + esc(b) + "</button>").join("") + "</div>" : "")
+    + "</div>";
+}
+
+/* --- TAKEN: Claudes takenlijst (TaskCreate / TaskUpdate) als lijst onder het antwoord, zoals in Claude Desktop.
+   De lijst hoort bij de sessie: elke beurt bouwt verder op de vorige. --- */
+const TASK_RE = /^⁣tool (TaskCreate|TaskUpdate)\b[^\n]*\n⁣tin ([^\n]*)/gm, MADE_RE = /^⁣tout ([^\n]*Task #\d+ created[^\n]*)/gm;
+const hasTasks = (text) => !!text && /⁣tool Task(?:Create|Update)\b/.test(text);
+function taskState(texts) {   // texts: de antwoorden met taken tot en met deze beurt; de laatste is deze beurt
+  const list = new Map(); let n = 0;
+  for (const [at, text] of texts.entries()) {
+    const made = new Map();   // tool-id → het nummer dat Claude Code gaf ("Task #3 created")
+    for (const m of text.matchAll(MADE_RE)) { try { const d = JSON.parse(m[1]), k = /^Task #(\d+) created/.exec(d.o || ""); if (k) made.set(d.id, k[1]); } catch {} }
+    for (const m of text.matchAll(TASK_RE)) {
+      let d; try { d = JSON.parse(m[2]); } catch { continue; }
+      const i = d.i || {};
+      if (m[1] === "TaskCreate") {
+        const id = made.get(d.id) || String(n + 1); n = Math.max(n, +id);
+        list.set(id, { subject: i.subject || i.description || "", active: i.activeForm || "", status: "pending", at });
+      } else {
+        const id = String(i.taskId ?? ""), t = list.get(id);
+        if (!t) continue;
+        if (i.status === "deleted") { list.delete(id); continue; }
+        if (i.status) t.status = i.status;
+        t.at = at;
+        if (i.subject) t.subject = i.subject;
+        if (i.activeForm) t.active = i.activeForm;
+      }
+    }
+  }
+  return [...list.values()].filter((t) => t.status !== "completed" || t.at === texts.length - 1);   // vroeger afgewerkt: niet meer tonen
+}
+// de lijst onder de bubbel: tijdens het antwoord open en vastgeplakt onderaan, daarna dicht als alles klaar is
+function drawTasks(node, tasks, live) {
+  let box = node.querySelector(":scope .tasks");
+  if (!tasks.length) { if (box) box.remove(); return; }
+  if (!box) { box = document.createElement("details"); box.className = "tasks"; node.querySelector(".bubble-bot").after(box); }
+  const done = tasks.filter((t) => t.status === "completed").length, all = done === tasks.length, was = box.classList.contains("live");
+  box.classList.toggle("live", !!live); box.classList.toggle("all", all);
+  if (live || was || !box.dataset.drawn) box.open = live || !all;   // daarna blijft open of dicht zoals jij het zette
+  box.dataset.drawn = "1";
+  box.innerHTML = "<summary><b>TAKEN</b><span></span></summary><ol></ol>";
+  box.querySelector("summary span").textContent = done + "/" + tasks.length + (all ? " · KLAAR" : "");
+  box.querySelector("ol").append(...tasks.map((t) => {
+    const li = document.createElement("li"); li.className = t.status;
+    li.textContent = live && t.status === "in_progress" && t.active ? t.active : t.subject;
+    return li;
+  }));
+}
 function nestTools(root) {
   // a subagent's steps go into the folder of the Agent call that started it (also several levels deep)
   root.querySelectorAll("details.tool[data-p], .atext[data-p]").forEach((d) => {
@@ -1326,11 +1469,13 @@ function renderAll() {
   else if (!current || !current.turns.length) renderEmpty();
   else {
     const track = document.createElement("div"); track.className = "deck"; log.append(track);
+    const taskTexts = [];   // de takenlijst groeit over de beurten heen: elke beurt toont ze zoals ze toen was
     current.turns.forEach((t) => {   // één pagina per beurt: je vraag met het antwoord eronder
       const page = document.createElement("div"); page.className = "page"; track.append(page);
       deck.pages.push(page); deck.turns.push(t);
       addMe(t.prompt, page);
-      if (t.pending) { page.append(t.pending.node); if (t.pending.kind === "claude") scheduleDraw(t.pending); } else addBot(t, page);
+      if (t.pending) { page.append(t.pending.node); if (t.pending.kind === "claude") scheduleDraw(t.pending); }
+      else { const n = addBot(t, page); if (hasTasks(t.text)) { taskTexts.push(t.text); drawTasks(n, taskState(taskTexts), false); } }
     });
     deck.n = deck.pages.length;
   }
@@ -1435,6 +1580,7 @@ function addBot(t, page) {
   let n = isChatModel(t.model) && !t.error ? botCache.get(t) : null;
   if (!n) { n = botNode(t.model); fillBot(n, t, current && current.cwd); if (isChatModel(t.model) && !t.error) botCache.set(t, n); }
   page.append(n);
+  return n;
 }
 // wat scrollt: met SWIPE de pagina van dat bericht (of die je ziet), anders het hele gesprek
 const scroller = (el) => decked() ? (el && el.closest(".page")) || deck.pages[deck.i] : $("log");
@@ -1806,6 +1952,7 @@ function drawJob(j) {
   j.body.querySelectorAll("details.tool:not(.done)").forEach((d) => d.classList.add("run"));
   fresh.forEach((n) => n.nodeType === 1 && linkFiles(n, j.chat.cwd));
   if (stick) scrollDown(true, j.node);
+  if (j.tasksDirty) { j.tasksDirty = false; drawTasks(j.node, taskState([...j.prevTasks, j.text]), true); }
   if (j.chat === current) syncTeam(true);
 }
 const settled = new Map();   // bericht-id → afgewerkte job, voor wat Claude Code na het einde nog stuurt
@@ -1816,6 +1963,7 @@ window.hygra = {
     j.text += text.replace(/\r/g, "");
     for (const m of text.matchAll(/\u2063me (.*)/g)) { try { (j.taken ||= new Set()).add(JSON.parse(m[1]).u); } catch {} }
     if (j.taken && j.queued && j.queued.length) drawQueue(j);
+    if (/Task(?:Create|Update)\b|Task #\d+ created/.test(text)) j.tasksDirty = true;
     const tm = /\u2063tool ([^\s·]+)/.exec(text);   // which tool, in the status: WERKT · BASH
     if (tm) j.state = "WERKT · " + tm[1].replace(/^mcp__.*__/, "").toUpperCase();
     else if (!/^\n*\u2063/.test(text)) j.state = "SCHRIJFT";
@@ -1926,6 +2074,8 @@ function claudeJob(chat, turn, id, t0, model = "claude") {
   job.node.querySelector(".what").textContent = MODEL_LABEL[model];
   job.body = job.node.querySelector(".body"); job.body.className = "body md"; job.body.innerHTML = '<span class="caret"></span>';
   job.foot = job.node.querySelector(".foot");
+  const k = chat.turns.indexOf(turn);   // de takenlijst tot vóór deze beurt (na een herstart staat de beurt er al in)
+  job.prevTasks = (k < 0 ? chat.turns : chat.turns.slice(0, k)).filter((t) => !t.pending && hasTasks(t.text)).map((t) => t.text);
   return job;
 }
 
@@ -1946,6 +2096,7 @@ async function settle(job, r) {
   if (!r.stopped) api().flash().catch(() => {});   // taakbalkknop knippert als HyGra niet vooraan staat
   if (job.kind === "claude") {   // ook als het gesprek niet open staat: de node blijft voor later bewaard
     job.node.dataset.settled = "1"; fillBot(job.node, turn, chat.cwd); botCache.set(turn, job.node);
+    drawTasks(job.node, hasTasks(turn.text) ? taskState([...job.prevTasks, turn.text]) : [], false);
     settled.set(job.id, { turn, chat, node: job.node });
     setTimeout(() => settled.delete(job.id), 120000);
   }
@@ -2311,6 +2462,16 @@ function setSide(min) {   // zijbalk in- of uitklappen; blijft onthouden
 }
 try { setSide(localStorage.getItem("hygra-side") === "min"); } catch {}
 $("side-btn").onclick = () => setSide(!$("side").classList.contains("min"));
+// MINIMAAL: alleen het gesprek en de invoer (Ctrl+M of in de instellingen); blijft onthouden
+function setMinimal(on) {
+  document.body.classList.toggle("minimal", on);
+  $("minimal").checked = on;
+  try { localStorage.setItem("hygra-minimal", on ? "1" : "0"); } catch {}
+  if (!$("prefs").classList.contains("hidden")) setPrefs(true);   // het paneel schuift mee naar zijn nieuwe plek
+}
+try { setMinimal(localStorage.getItem("hygra-minimal") === "1"); } catch {}
+$("minimal").onchange = () => setMinimal($("minimal").checked);
+$("min-exit").onclick = () => { setMinimal(false); $("prompt").focus(); };
 document.addEventListener("keydown", (e) => {   // Ctrl+O, like the transcript view in Claude Code; Ctrl+B = zijbalk; Ctrl+N = nieuw gesprek
   if (!e.ctrlKey || e.shiftKey || e.altKey) return;
   const k = e.key.toLowerCase();
@@ -2319,6 +2480,7 @@ document.addEventListener("keydown", (e) => {   // Ctrl+O, like the transcript v
   else if (k === "o") { e.preventDefault(); $("verbose").checked = !$("verbose").checked; syncVerbose(); }
   else if (k === "b") { e.preventDefault(); setSide(!$("side").classList.contains("min")); }
   else if (k === "t") { e.preventDefault(); setTeam($("team").classList.contains("hidden")); }
+  else if (k === "m") { e.preventDefault(); setMinimal(!document.body.classList.contains("minimal")); }
 });
 // instellingen: paneel onder de knop bij het logo (of ernaast als de zijbalk een rail is)
 function setPrefs(open) {
@@ -2326,6 +2488,10 @@ function setPrefs(open) {
   p.classList.toggle("hidden", !open);
   b.setAttribute("aria-expanded", open ? "true" : "false");
   if (!open) return;
+  if (document.body.classList.contains("minimal")) {   // geen zijbalk: rechtsboven, onder de knop om terug te gaan
+    p.style.left = Math.max(8, innerWidth - p.offsetWidth - 14) + "px"; p.style.top = "56px";
+    return p.querySelector("input:checked")?.focus();
+  }
   const r = b.getBoundingClientRect(), rail = $("side").classList.contains("min");
   const left = rail ? r.right + 10 : $("side").getBoundingClientRect().left + 12;
   p.style.left = Math.max(8, Math.min(left, innerWidth - p.offsetWidth - 8)) + "px";
@@ -2398,6 +2564,12 @@ $("log").addEventListener("click", (e) => {   // bestandslink: openen met de sta
   if (!a) return;
   e.preventDefault();
   api().open_path(a.dataset.full).then((r) => { if (r && r.error) setStatus("Kan niet openen: " + r.error); });
+});
+$("log").addEventListener("click", (e) => {   // een knop op de slotkaart: dat is je antwoord, meteen verstuurd
+  const b = e.target.closest(".nbtn");
+  if (!b || !current || viewJob() || b.closest(".page") !== deck.pages[deck.n - 1]) return;
+  const p = $("prompt"), keep = p.value;
+  p.value = b.dataset.say; send(new Event("submit")); p.value = keep;
 });
 $("new").onclick = () => { current = null; renderAll(); $("prompt").focus(); };
 $("temp").oninput = () => $("tval").textContent = (+$("temp").value).toFixed(1);

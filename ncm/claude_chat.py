@@ -32,7 +32,15 @@ SYSTEM = ("Je draait in HyGra, een desktop-chatapp van HydrarGyrum, met volledig
           "Gebruik Markdown (tabellen mogen); zet code altijd in een codeblok met de taal erbij. "
           "Wiskunde mag in LaTeX: $...$ inline en $$...$$ apart; de app rendert dat met KaTeX. "
           "Zet je agents in voor onafhankelijke deeltaken, start ze dan samen in één bericht zodat ze parallel lopen; "
-          "de app toont elk als een map met haar eigen chat.")
+          "de app toont elk als een map met haar eigen chat. "
+          "Bij werk met meerdere stappen: maak eerst een takenlijst met TaskCreate (de app toont die live onder je antwoord) "
+          "en houd ze bij met TaskUpdate (in_progress als je aan een stap begint, completed als ze klaar is). "
+          "Deed je echt werk (bestanden veranderd, commando's, meerdere stappen), sluit dan af met een blok helemaal onderaan:\n"
+          "```next\nrecap: wat nu klaar is en wat nog open staat, in één of twee korte zinnen\n"
+          "vraag: één korte vraag, alleen als er een beslissing bij de gebruiker ligt\nknop: je aanbeveling (1-3 woorden)\n"
+          "knop: een echt alternatief (optioneel)\n```\n"
+          "De app toont dat als een kaart met knoppen; zonder vraag laat je vraag en knoppen weg. "
+          "Niet bij korte antwoorden of een gewoon gesprek.")
 WORKDIR = os.path.expanduser("~")   # starts in the home folder, like a terminal would
 DATA = os.path.join(os.environ.get("LOCALAPPDATA", WORKDIR), "HyGra")
 LIMITS = os.path.join(DATA, "limits.json")   # last known usage of the plan
@@ -217,7 +225,9 @@ def _cmd(exe, model, session_id, first):
 
 def _env():
     # never fall back to paid API billing: only the subscription login may be used
-    return {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
+    env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
+    env["CLAUDE_CODE_ENABLE_TODO_TOOLS"] = "1"   # TaskCreate/TaskUpdate also in -p mode: the page shows them as a task list
+    return env
 
 
 def _cwd(cwd):

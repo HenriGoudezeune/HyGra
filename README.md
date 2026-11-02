@@ -19,6 +19,10 @@ HyGra (from *HydrarGyrum*, Hg, element 80) runs **Claude Opus 5.5** through Clau
 - **ChatGPT and Gemini too.** Pick ChatGPT (through the [Codex](https://github.com/openai/codex) CLI, on a free ChatGPT account) or Gemini (through the Antigravity CLI, on your Google account; HyGra takes the best Gemini your account offers, Pro if you have it). Each chat keeps its own conversation per model, and a model you switch to gets the turns it missed as context. Local-model settings and mid-turn messages only show where they belong.
 - **Remote Control.** Every chat is also a session in the Claude mobile app and on claude.ai/code while a reply runs.
 - **Agent teams as folders.** Every agent Claude starts is a folder in the reply: type, task, status, duration and steps, with its own tool calls, sub-agents as subfolders and its result inside. The *Team* panel (Ctrl+T) shows all agents of the chat as a live tree; click one to jump to it. Calls to the local model show up as workers.
+- **A task list under the reply.** For work with several steps, Claude keeps a task list (Claude Code's TaskCreate/TaskUpdate). It shows live under the running reply and sticks to the bottom while Claude works, with the current step blinking. Afterwards it folds to *TAKEN 4/4 · KLAAR*.
+- **A wrap-up with buttons.** After real work, Claude ends with a short card: what is done and what is still open, and if a decision is yours, one question with one or two buttons. A click sends that answer.
+- **Messages between sessions.** When Claude sends a message to another session (SendMessage), the reply shows a line *BERICHT → session* with what it said.
+- **Minimal view (Ctrl+M).** Only the conversation and the input, centered: no sidebar, header, meters, avatars, tool lines or waifu art. Frames, colors, fonts and funky mode stay, so each theme is still itself. Leave it with Ctrl+M or the faint corner button; settings stay on Ctrl+,.
 - **See what Claude does.** *Details* (Ctrl+O) opens each tool call to its input and output, and shows Claude's thinking.
 - **Swipe through your questions.** Every question gets its own page with its reply under it. The second question slides in from the right, and so does every one after it. Swipe left on the touchpad or touchscreen to see an earlier question with its reply, and swipe right to come back. You can also use the side arrows, the ticks at the top or Alt+←/→. Normal scrolling still works: scroll past the top or bottom of a page and you land on the previous or next question. Switch *Swipe* off in settings for a classic single-column chat.
 - **Readable replies.** Markdown, KaTeX math, code blocks that start collapsed, and file paths you can click to open.
@@ -52,6 +56,7 @@ Pick one in the settings panel (the sliders button next to the logo, or **Ctrl+,
 | Esc | Stop the reply |
 | Ctrl+N | New chat |
 | Ctrl+B | Fold the sidebar into a rail |
+| Ctrl+M | Minimal view: only the conversation and the input |
 | Ctrl+O | Details: tool input/output and thinking |
 | Ctrl+, | Settings |
 | Alt+← / Alt+→ | Previous / next question (Swipe; plain ←/→ when you are not typing) |
